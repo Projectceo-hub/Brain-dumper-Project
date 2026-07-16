@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Sidebar from "@/components/Sidebar";
 import {
   getFolderById,
   getNotesInFolder,
@@ -58,7 +59,11 @@ export default function FolderPage() {
 
   useEffect(() => {
     if (folderId) {
-      fetchFolderAndNotes();
+      const timer = setTimeout(() => {
+        fetchFolderAndNotes();
+      }, 0);
+
+      return () => clearTimeout(timer);
     }
   }, [folderId]);
 
@@ -136,7 +141,10 @@ export default function FolderPage() {
   }
 
   return (
-    <div className="min-h-screen bg-bone px-5 pt-6 pb-8 relative">
+    <div className="flex min-h-screen bg-bone">
+      <Sidebar activeFolderId={folderId} />
+
+      <div className="relative min-h-screen flex-1 px-5 pt-6 pb-8 lg:pl-5 pl-14">
       {/* Folder Header View */}
       <div className="flex items-center gap-1 text-warm-gray hover:text-ink transition-colors cursor-pointer text-sm font-sans" onClick={() => router.push("/")}>
         <span>←</span>
@@ -244,6 +252,7 @@ export default function FolderPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

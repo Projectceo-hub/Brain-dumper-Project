@@ -18,8 +18,74 @@ import {
   getChildNotes,
   getAllNotesWithFolders,
   getAllFolders,
-  createNotesFromTree
+  createNotesFromTree,
+  saveEntities,
+  getEntitiesForNoteTree,
+  getEntitiesByNames,
+  updateNote
 } from "@/lib/db";
+
+const ENTITY_ICONS = {
+  person: "👤",
+  company: "🏢",
+  project: "📁",
+};
+
+function EntityNode({ data }) {
+  const icon = ENTITY_ICONS[data.entityType] || "◆";
+  return (
+    <div className="flex flex-col items-center select-none relative">
+      <Handle
+        type="target"
+        position={Position.Left}
+        style={{
+          background: "transparent",
+          border: "none",
+          width: 1,
+          height: 1,
+          left: "50%",
+          top: "50%",
+          transform: "translate(-50%, -50%)",
+        }}
+      />
+      <div
+        className="flex items-center justify-center shadow-md cursor-pointer hover:scale-110 transition-transform border-2 border-clay"
+        style={{
+          width: 36,
+          height: 36,
+          backgroundColor: "#C4571F22",
+          transform: "rotate(45deg)",
+          borderRadius: 4,
+        }}
+      >
+        <span
+          className="text-sm leading-none"
+          style={{ transform: "rotate(-45deg)" }}
+        >
+          {icon}
+        </span>
+      </div>
+      {data.label && (
+        <span className="mt-2 whitespace-nowrap text-[9px] font-sans text-clay pointer-events-none max-w-[80px] truncate">
+          {data.label}
+        </span>
+      )}
+      <Handle
+        type="source"
+        position={Position.Right}
+        style={{
+          background: "transparent",
+          border: "none",
+          width: 1,
+          height: 1,
+          left: "50%",
+          top: "50%",
+          transform: "translate(-50%, -50%)",
+        }}
+      />
+    </div>
+  );
+}
 
 // 1. Custom Flat Dot Node (for Global Obsidian View)
 function DotNode({ data }) {
@@ -198,6 +264,7 @@ async function fetchDescendantTree(parentNoteId) {
       id: child.id,
       title: child.title,
       body: child.body,
+      entityRefs: child.entityRefs || [],
       children: grandchildren,
     });
   }
@@ -214,10 +281,14 @@ function GraphContent() {
   const [loading, setLoading] = useState(true);
   const [aiMapping, setAiMapping] = useState(false);
   const [noteTitle, setNoteTitle] = useState("");
-  const [selectedNote, setSelectedNote] = useState(null); // Sidebar content
+  const [selectedNote, setSelectedNote] = useState(null);
+  const [selectedEntity, setSelectedEntity] = useState(null);
 
   const velocities = useRef({});
-  const nodeTypes = useMemo(() => ({ dot: DotNode, pill: PillNode }), []);
+  const nodeTypes = useMemo(
+    () => ({ dot: DotNode, pill: PillNode, entity: EntityNode }),
+    []
+  );
 
   // 1. Initial Data Loading & Tree Construction
   useEffect(() => {
@@ -251,9 +322,16 @@ function GraphContent() {
               if (res.ok) {
                 const data = await res.json();
                 if (data && data.tree && Array.isArray(data.tree.children)) {
-                  // Save generated subtopics into DB connected to parent note
+                  if (Array.isArray(data.entities) && data.entities.length > 0) {
+                    await saveEntities(data.entities, rootNote.id);
+                  }
                   for (const child of data.tree.children) {
                     await createNotesFromTree(rootNote.folderId, child, rootNote.id);
+                  }
+                  if (data.tree.entityRefs?.length) {
+                    await updateNote(rootNote.id, {
+                      entityRefs: data.tree.entityRefs,
+                    });
                   }
                 }
               } else {
@@ -279,17 +357,17 @@ function GraphContent() {
             id: rootNote.id,
             title: rootNote.title || "Untitled",
             body: rootNote.body,
+            entityRefs: rootNote.entityRefs || [],
             children: descendants,
           };
 
           const newNodes = [];
           const newEdges = [];
+          const entityNodeIds = new Map();
 
-          // Walk descendants and lay them out horizontally (Left-to-Right)
           function buildHorizontalGraph(node, depth = 0, parentId = null, px = 100, py = 300, siblingIndex = 0, totalSiblings = 1) {
             const currentId = `note-${node.id}`;
 
-            // Space items vertically and shift rightwards by depth
             const spacingY = 90;
             const startY = py - ((totalSiblings - 1) * spacingY) / 2;
             const y = startY + siblingIndex * spacingY;
@@ -303,6 +381,7 @@ function GraphContent() {
                 label: node.title || "Untitled",
                 title: node.title || "Untitled",
                 body: node.body || "",
+                entityRefs: node.entityRefs || [],
               },
             });
 
@@ -311,7 +390,7 @@ function GraphContent() {
                 id: `edge-${parentId}-${currentId}`,
                 source: parentId,
                 target: currentId,
-                type: "bezier", // smooth curved lines connecting pills
+                type: "bezier",
                 style: { stroke: "#3A352C", strokeWidth: 1.5 },
               });
             }
@@ -325,6 +404,40 @@ function GraphContent() {
           }
 
           buildHorizontalGraph(fullTree, 0, null, 100, 300, 0, 1);
+
+          const treeEntities = await getEntitiesForNoteTree(rootNote.id);
+          treeEntities.forEach((entity, idx) => {
+            const entityNodeId = `entity-${entity.id}`;
+            entityNodeIds.set(entity.name, entityNodeId);
+            newNodes.push({
+              id: entityNodeId,
+              type: "entity",
+              position: { x: 40, y: 120 + idx * 70 },
+              data: {
+                label: entity.name,
+                title: entity.name,
+                body: `${entity.type.charAt(0).toUpperCase()}${entity.type.slice(1)} entity`,
+                entityType: entity.type,
+                isEntity: true,
+              },
+            });
+          });
+
+          newNodes.forEach((node) => {
+            if (node.type !== "pill" || !node.data.entityRefs?.length) return;
+            node.data.entityRefs.forEach((refName) => {
+              const entityNodeId = entityNodeIds.get(refName);
+              if (!entityNodeId) return;
+              newEdges.push({
+                id: `edge-${node.id}-${entityNodeId}`,
+                source: node.id,
+                target: entityNodeId,
+                type: "bezier",
+                style: { stroke: "#C4571F", strokeWidth: 1, strokeDasharray: "4 4" },
+              });
+            });
+          });
+
           setNodes(newNodes);
           setEdges(newEdges);
         } else {
@@ -549,11 +662,21 @@ function GraphContent() {
 
   // Click on a node opens the side panel displaying details
   const onNodeClick = (event, node) => {
+    if (node.data?.isEntity) {
+      setSelectedEntity({
+        name: node.data.title || node.data.label,
+        type: node.data.entityType || "entity",
+        description: node.data.body || "",
+      });
+      setSelectedNote(null);
+      return;
+    }
     if (node.data && (node.data.title || node.data.body)) {
       setSelectedNote({
         title: node.data.title || "Untitled",
         body: node.data.body || "",
       });
+      setSelectedEntity(null);
     }
   };
 
@@ -620,27 +743,55 @@ function GraphContent() {
       )}
 
       {/* Slide-out Sidebar Panel */}
-      {selectedNote && (
+      {(selectedNote || selectedEntity) && (
         <div className="fixed top-0 right-0 h-full w-[350px] bg-ink border-l border-graph-line z-30 shadow-2xl p-6 text-bone flex flex-col transition-all duration-300 animate-slide-in-right">
           <div className="flex items-center justify-between">
             <span className="text-warm-gray-light font-sans text-xs uppercase tracking-widest font-semibold">
-              Content Details
+              {selectedEntity ? "Entity" : "Content Details"}
             </span>
             <button
-              onClick={() => setSelectedNote(null)}
+              onClick={() => {
+                setSelectedNote(null);
+                setSelectedEntity(null);
+              }}
               className="text-warm-gray hover:text-bone text-2xl font-sans cursor-pointer focus:outline-none"
             >
               &times;
             </button>
           </div>
-          <h2 className="font-serif text-2xl font-bold text-bone mt-2 border-b border-graph-line pb-3 leading-tight">
-            {selectedNote.title}
-          </h2>
-          <div className="font-sans text-sm text-warm-gray-light leading-relaxed mt-4 flex-1 overflow-y-auto whitespace-pre-wrap pr-1 scrollbar-thin">
-            {selectedNote.body || (
-              <span className="italic text-warm-gray">No description available.</span>
-            )}
-          </div>
+          {selectedEntity ? (
+            <>
+              <div className="mt-4 flex items-center gap-3">
+                <div
+                  className="flex h-10 w-10 items-center justify-center border-2 border-clay"
+                  style={{ transform: "rotate(45deg)", borderRadius: 4, backgroundColor: "#C4571F22" }}
+                >
+                  <span style={{ transform: "rotate(-45deg)" }}>
+                    {ENTITY_ICONS[selectedEntity.type] || "◆"}
+                  </span>
+                </div>
+                <div>
+                  <h2 className="font-serif text-2xl font-bold text-bone leading-tight">
+                    {selectedEntity.name}
+                  </h2>
+                  <p className="font-sans text-xs text-clay capitalize mt-0.5">
+                    {selectedEntity.type}
+                  </p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 className="font-serif text-2xl font-bold text-bone mt-2 border-b border-graph-line pb-3 leading-tight">
+                {selectedNote.title}
+              </h2>
+              <div className="font-sans text-sm text-warm-gray-light leading-relaxed mt-4 flex-1 overflow-y-auto whitespace-pre-wrap pr-1 scrollbar-thin">
+                {selectedNote.body || (
+                  <span className="italic text-warm-gray">No description available.</span>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
