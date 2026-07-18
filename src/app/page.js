@@ -218,7 +218,7 @@ export default function Dashboard() {
   };
 
   const capsuleExpanded = capsuleState !== "collapsed";
-  const capsuleRadius = capsuleHeight > 56 ? "24px" : "9999px";
+  const capsuleRadius = capsuleHeight > 56 ? "22px" : "9999px";
 
   return (
     <div className="flex min-h-screen bg-bone">
@@ -369,7 +369,9 @@ export default function Dashboard() {
               style={{
                 width: "min(90vw, 400px)",
                 minHeight: "48px",
+                maxHeight: "45vh",
                 borderRadius: capsuleRadius,
+                transition: "border-radius 200ms ease, height 200ms ease, max-height 200ms ease",
               }}
             >
               <textarea

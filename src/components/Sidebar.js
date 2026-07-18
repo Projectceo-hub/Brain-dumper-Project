@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { getAllFolders, getNotesInFolder, createFolder } from "@/lib/db";
@@ -14,7 +14,7 @@ export default function Sidebar({ activeFolderId = null }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [creating, setCreating] = useState(false);
 
-  const loadSidebar = async () => {
+  const loadSidebar = useCallback(async () => {
     const folderList = await getAllFolders();
     setFolders(folderList);
 
@@ -24,10 +24,28 @@ export default function Sidebar({ activeFolderId = null }) {
       counts[folder.id] = notes.length;
     }
     setNoteCounts(counts);
-  };
+  }, []);
 
   useEffect(() => {
-    loadSidebar();
+    let cancelled = false;
+
+    (async () => {
+      const folderList = await getAllFolders();
+      if (cancelled) return;
+      setFolders(folderList);
+
+      const counts = {};
+      for (const folder of folderList) {
+        const notes = await getNotesInFolder(folder.id);
+        if (cancelled) return;
+        counts[folder.id] = notes.length;
+      }
+      if (!cancelled) setNoteCounts(counts);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [pathname]);
 
   useEffect(() => {
@@ -125,6 +143,13 @@ export default function Sidebar({ activeFolderId = null }) {
       </nav>
 
       <div className="border-t border-graph-line/40 px-5 py-4">
+        <Link
+          href="/settings/integrations"
+          onClick={() => setMobileOpen(false)}
+          className="block font-sans text-xs font-semibold text-warm-gray-light hover:text-bone transition-colors mb-2"
+        >
+          Integrations
+        </Link>
         {email && (
           <p className="truncate font-sans text-xs text-warm-gray mb-2" title={email}>
             {email}

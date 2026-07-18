@@ -40,6 +40,11 @@ export default function FolderPage() {
   const [editBody, setEditBody] = useState("");
   const autosaveTimerRef = useRef(null);
 
+  // Send-to-Notion state
+  const [notionSending, setNotionSending] = useState(false);
+  const [notionSentId, setNotionSentId] = useState(null);
+  const [notionError, setNotionError] = useState("");
+
   const fetchFolderAndNotes = async () => {
     try {
       const f = await getFolderById(folderId);
@@ -98,7 +103,6 @@ export default function FolderPage() {
   };
 
   const handleCloseEditor = async () => {
-    // Flush any pending save immediately
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
     }
@@ -106,6 +110,8 @@ export default function FolderPage() {
       await updateNote(editingNote.id, { title: editTitle, body: editBody });
     }
     setEditingNote(null);
+    setNotionSentId(null);
+    setNotionError("");
     fetchFolderAndNotes();
   };
 
@@ -130,6 +136,36 @@ export default function FolderPage() {
   const handleBodyChange = (val) => {
     setEditBody(val);
     triggerAutosave(editTitle, val);
+  };
+
+  const handleSendToNotion = async () => {
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+    }
+    await updateNote(editingNote.id, { title: editTitle, body: editBody });
+    setNotionSending(true);
+    setNotionError("");
+    setNotionSentId(null);
+    try {
+      const res = await fetch("/api/notion/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          noteId: editingNote.id,
+          title: editTitle,
+          body: editBody,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to send to Notion");
+      }
+      setNotionSentId(data?.pageId || null);
+    } catch (err) {
+      setNotionError(err.message);
+    } finally {
+      setNotionSending(false);
+    }
   };
 
   if (loading) {
@@ -233,11 +269,10 @@ export default function FolderPage() {
             className="w-full flex-1 font-sans text-ink text-base bg-transparent outline-none border-none mt-4 resize-none placeholder-warm-gray-light leading-relaxed min-h-[300px]"
           />
 
-          {/* Visualize Button */}
-          <div className="mt-8 border-t border-warm-gray-light/20 pt-4 flex justify-center">
+          {/* Visualize + Send to Notion */}
+          <div className="mt-8 border-t border-warm-gray-light/20 pt-4 flex flex-wrap items-center justify-center gap-3">
             <button
               onClick={() => {
-                // Ensure save triggers before navigating
                 if (autosaveTimerRef.current) {
                   clearTimeout(autosaveTimerRef.current);
                 }
@@ -249,7 +284,33 @@ export default function FolderPage() {
             >
               Visualize this note
             </button>
+
+            <button
+              onClick={handleSendToNotion}
+              disabled={notionSending}
+              className="border border-clay text-clay hover:bg-clay hover:text-bone font-sans text-sm px-6 py-2 rounded-full cursor-pointer transition-all active:scale-[0.98] font-semibold disabled:opacity-50"
+            >
+              {notionSending ? "Sending..." : "Send to Notion"}
+            </button>
           </div>
+
+          {notionSentId && (
+            <p className="mt-3 text-center font-sans text-sm text-pine">
+              Sent to Notion.
+            </p>
+          )}
+          {notionError && (
+            <p className="mt-3 text-center font-sans text-sm text-clay">
+              {notionError}
+              <button
+                type="button"
+                onClick={() => router.push("/settings/integrations")}
+                className="ml-2 underline hover:text-ink transition-colors"
+              >
+                Fix in Integrations
+              </button>
+            </p>
+          )}
         </div>
       )}
       </div>
