@@ -99,6 +99,7 @@ export async function getProvider(baseUrl) {
       userinfo: { enabled: false },
       backchannelLogout: { enabled: false },
       claimsParameter: { enabled: false },
+      devInteractions: { enabled: false },
     },
 
     // PKCE required, S256 only (per MCP authorization spec).
@@ -134,6 +135,23 @@ export async function getProvider(baseUrl) {
       token_endpoint_auth_method: "none",       // public client — PKCE replaces client_secret
       id_token_signed_response_alg: "RS256",
     },
+
+    // Pre-registered static client for claude.ai's web connector.
+    // Coexists with DCR (features.registration.enabled above) so additional
+    // clients can still self-register.
+    clients: [
+      {
+        client_id: "claude-ai-web",
+        client_secret: undefined,
+        token_endpoint_auth_method: "none",
+        grant_types: ["authorization_code", "refresh_token"],
+        response_types: ["code"],
+        redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
+        scope: "mcp",
+        application_type: "web",
+        id_token_signed_response_alg: "RS256",
+      },
+    ],
 
     // Interaction policy — auto-approve for MCP connector flow.
     interactions: {
