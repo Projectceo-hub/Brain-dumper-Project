@@ -14,24 +14,11 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { resolveUserFromBearer, isServiceRoleConfigured } from "@/lib/mcp/auth";
 import { buildMcpServer } from "@/lib/mcp/server";
 
-const JSONRPC_UNAUTHORIZED = {
-  jsonrpc: "2.0",
-  error: {
-    code: -32001,
-    message:
-      "Unauthorized. Send an Authorization: Bearer <MindCanvas API token> header. Generate a token at /settings/tokens.",
-  },
-  id: null,
-};
-
-function unauthorizedResponse(request) {
-  const url = new URL(request.url);
-  const origin = `${url.protocol}//${url.host}`;
-  return new Response(JSON.stringify(JSONRPC_UNAUTHORIZED), {
+function unauthorizedResponse() {
+  return new Response(null, {
     status: 401,
     headers: {
-      "Content-Type": "application/json",
-      "WWW-Authenticate": `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource"`,
+      "WWW-Authenticate": 'Bearer resource_metadata="https://brain-dumper-project.vercel.app/.well-known/oauth-protected-resource"',
     },
   });
 }
@@ -87,7 +74,7 @@ async function handleRequest(request) {
 
   const userId = await resolveUserFromBearer(request.headers.get("authorization"));
   if (!userId) {
-    return unauthorizedResponse(request);
+    return unauthorizedResponse();
   }
 
   // Per-request, stateless transport: no session id is generated or
@@ -146,6 +133,15 @@ export async function GET(request) {
 
 export async function DELETE(request) {
   return handleRequest(request);
+}
+
+export async function HEAD() {
+  return new Response(null, {
+    status: 401,
+    headers: {
+      "WWW-Authenticate": 'Bearer resource_metadata="https://brain-dumper-project.vercel.app/.well-known/oauth-protected-resource"',
+    },
+  });
 }
 
 export async function OPTIONS() {
