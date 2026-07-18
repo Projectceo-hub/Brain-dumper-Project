@@ -144,11 +144,11 @@ export default function Sidebar({ activeFolderId = null }) {
 
       <div className="border-t border-graph-line/40 px-5 py-4">
         <Link
-          href="/settings/integrations"
+          href="/settings/tokens"
           onClick={() => setMobileOpen(false)}
           className="block font-sans text-xs font-semibold text-warm-gray-light hover:text-bone transition-colors mb-2"
         >
-          Integrations
+          API tokens & MCP
         </Link>
         {email && (
           <p className="truncate font-sans text-xs text-warm-gray mb-2" title={email}>
