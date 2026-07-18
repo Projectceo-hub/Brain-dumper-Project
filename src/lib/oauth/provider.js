@@ -92,7 +92,6 @@ export async function getProvider(baseUrl) {
 
     // DCR — allow any client that includes the known claude.ai callback.
     features: {
-      dcr: { enabled: true },
       registration: { enabled: true },
       registrationManagement: { enabled: true, rotateRegistrationAccessToken: true },
       introspection: { enabled: true },
