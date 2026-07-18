@@ -24,10 +24,15 @@ const JSONRPC_UNAUTHORIZED = {
   id: null,
 };
 
-function unauthorizedResponse() {
+function unauthorizedResponse(request) {
+  const url = new URL(request.url);
+  const origin = `${url.protocol}//${url.host}`;
   return new Response(JSON.stringify(JSONRPC_UNAUTHORIZED), {
     status: 401,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "WWW-Authenticate": `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource"`,
+    },
   });
 }
 
@@ -82,7 +87,7 @@ async function handleRequest(request) {
 
   const userId = await resolveUserFromBearer(request.headers.get("authorization"));
   if (!userId) {
-    return unauthorizedResponse();
+    return unauthorizedResponse(request);
   }
 
   // Per-request, stateless transport: no session id is generated or
