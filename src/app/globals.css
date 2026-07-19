@@ -32,6 +32,72 @@ body {
   font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
+/* ------------------------------------------------------------------ */
+/* Route transition animations                                         */
+/* ------------------------------------------------------------------ */
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes page-exit {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+/*
+ * Apply the entry animation to every route automatically. The exit animation
+ * is intentionally NOT applied globally because Next.js App Router swaps
+ * children synchronously in the same DOM node — instead, we use a tiny
+ * keyframe-based fade-in on route change that feels like an app, not a
+ * website. Per the spec: <250ms, slight upward translate, ease-out.
+ */
+.route-enter {
+  animation: page-enter 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ------------------------------------------------------------------ */
+/* Card / row stagger animations                                       */
+/* ------------------------------------------------------------------ */
+
+@keyframes stagger-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/*
+ * Generic stagger utility: applies a fade+rise with an inline animation-delay
+ * set via style={{ animationDelay: "40ms" }} etc. Duration ~200ms, ease-out,
+ * matching the spec for folder cards (40ms stagger) and note rows (20ms).
+ */
+.stagger-item {
+  opacity: 0;
+  animation: stagger-rise 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ------------------------------------------------------------------ */
+/* Capsule input animations                                            */
+/* ------------------------------------------------------------------ */
+
 @keyframes expand-bounce {
   0% {
     scale: 0.75;
@@ -55,6 +121,49 @@ body {
   transform-origin: bottom center;
 }
 
+/*
+ * Capsule collapse: quick fade + scale back to pill shape. Spec: 150ms.
+ */
+@keyframes collapse-pill {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+
+.animate-collapse-pill {
+  animation: collapse-pill 150ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  transform-origin: bottom center;
+}
+
+/*
+ * Options menu entry: each item slides in from below with a 30ms stagger
+ * and ease-out. Spec: 30ms stagger, ease-out.
+ */
+@keyframes option-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.option-item {
+  opacity: 0;
+  animation: option-slide-up 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ------------------------------------------------------------------ */
+/* Side panel / sidebar animations                                     */
+/* ------------------------------------------------------------------ */
+
 @keyframes slide-in-right {
   from {
     transform: translateX(100%);
@@ -66,6 +175,182 @@ body {
 
 .animate-slide-in-right {
   animation: slide-in-right 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/*
+ * Sidebar active-folder indicator: a 3px clay-coloured bar that slides in
+ * from the top of the item rather than just popping into existence. Spec:
+ * "slides in, doesn't just appear".
+ */
+@keyframes sidebar-indicator {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+.sidebar-indicator {
+  transform-origin: top center;
+  animation: sidebar-indicator 100ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ------------------------------------------------------------------ */
+/* Graph node entry animation                                          */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Applied as inline style on xyflow node containers (because xyflow sets
+ * transform: translate(...). We can't use transform here or we'd fight
+ * xyflow — so we just fade them in via opacity. Stagger by node-index
+ * capped at 400ms total per the spec.
+ */
+@keyframes node-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.graph-node-enter {
+  animation: node-fade-in 200ms ease-out forwards;
+}
+
+/* ------------------------------------------------------------------ */
+/* Note row hover states                                               */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Left clay-coloured accent bar that grows from the top on hover. Spec:
+ * "3px solid #C4571F, 120ms ease".
+ */
+.note-row-accent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: var(--color-clay);
+  transform: scaleY(0);
+  transform-origin: top center;
+  transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.note-row:hover .note-row-accent,
+.note-row:focus-visible .note-row-accent {
+  transform: scaleY(1);
+}
+
+.note-row {
+  transition: background-color 120ms ease-out, transform 120ms ease-out;
+}
+
+.note-row:hover {
+  background-color: rgba(237, 223, 203, 0.55); /* tan at low alpha — warmer */
+}
+
+/* ------------------------------------------------------------------ */
+/* Folder card hover & press                                           */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Spec: hover → translateY(-2px) + slight shadow, 150ms ease; click →
+ * scale to 0.97 over 80ms. Tailwind hover/active utilities handle most of
+ * this; we add a press class so the click animation survives router.push.
+ */
+.folder-card {
+  transition:
+    transform 150ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 150ms ease-out;
+  will-change: transform;
+}
+
+.folder-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -12px rgba(28, 25, 18, 0.25);
+}
+
+.folder-card:active {
+  transform: scale(0.97);
+  transition-duration: 80ms;
+}
+
+/* ------------------------------------------------------------------ */
+/* Sidebar hover-fill (spec: slides in from left, 100ms ease-out)      */
+/* ------------------------------------------------------------------ */
+
+.sidebar-item {
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: rgba(255, 255, 255, 0.06);
+  transform: translateX(-100%);
+  transition: transform 100ms cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sidebar-item:hover::before {
+  transform: translateX(0);
+}
+
+.sidebar-item > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* prefers-reduced-motion — turn every animation above into a simple   */
+/* instant fade or no animation at all, per spec.                      */
+/* ------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .route-enter,
+  .stagger-item,
+  .animate-expand-bounce,
+  .animate-collapse-pill,
+  .option-item,
+  .animate-slide-in-right,
+  .sidebar-indicator,
+  .graph-node-enter {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    scale: 1 !important;
+  }
+
+  .note-row-accent,
+  .folder-card,
+  .sidebar-item::before {
+    transition: none !important;
+  }
+
+  .folder-card:hover {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+
+  .folder-card:active {
+    transform: none !important;
+  }
+
+  .note-row:hover .note-row-accent,
+  .note-row:focus-visible .note-row-accent {
+    transform: scaleY(1) !important;
+  }
+
+  /* Single-frame fade so transitions are still visible-ish but not animated */
+  .route-enter {
+    animation: page-enter 1ms linear both !important;
+  }
 }
 
 

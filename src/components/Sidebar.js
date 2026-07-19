@@ -100,17 +100,21 @@ export default function Sidebar({ activeFolderId = null }) {
           {folders.map((folder) => {
             const active = activeFolderId === folder.id;
             const count = noteCounts[folder.id] || 0;
-            return (
-              <li key={folder.id}>
+return (
+                  <li key={folder.id}>
                 <Link
                   href={`/folder/${folder.id}`}
                   onClick={() => setMobileOpen(false)}
-                  className={`flex items-center justify-between rounded-lg px-3 py-2.5 font-sans text-sm transition-colors ${
+                  className={`sidebar-item flex items-center justify-between rounded-lg px-3 py-2.5 font-sans text-sm transition-colors ${
                     active
-                      ? "bg-clay/20 text-bone font-semibold"
+                      ? "text-bone font-semibold"
                       : "text-warm-gray-light hover:bg-white/5 hover:text-bone"
                   }`}
                 >
+                  {/* Active indicator: 3px clay bar on the left, slides in via the animation */}
+                  {active && (
+                    <span className="absolute left-0 top-1 bottom-1 w-[3px] bg-clay rounded-r-sm sidebar-indicator" />
+                  )}
                   <span className="truncate">{folder.name}</span>
                   <span className="ml-2 shrink-0 text-xs text-warm-gray">{count}</span>
                 </Link>
@@ -132,12 +136,15 @@ export default function Sidebar({ activeFolderId = null }) {
         <Link
           href="/graph"
           onClick={() => setMobileOpen(false)}
-          className={`flex items-center rounded-lg px-3 py-2.5 font-sans text-sm transition-colors ${
+          className={`sidebar-item flex items-center rounded-lg px-3 py-2.5 font-sans text-sm transition-colors relative ${
             isGraph
-              ? "bg-clay/20 text-bone font-semibold"
+              ? "text-bone font-semibold"
               : "text-warm-gray-light hover:bg-white/5 hover:text-bone"
           }`}
         >
+          {isGraph && (
+            <span className="absolute left-0 top-1 bottom-1 w-[3px] bg-clay rounded-r-sm sidebar-indicator" />
+          )}
           Second brain
         </Link>
       </nav>

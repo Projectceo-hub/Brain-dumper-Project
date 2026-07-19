@@ -16,6 +16,18 @@ import {
   retryPendingSync
 } from "@/lib/db";
 
+// sessionStorage keys for capsule input persistence across tab switches.
+const CAPSULE_TEXT_KEY = "mindcanvas:capsule-text";
+
+function getStoredCapsuleText() {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.sessionStorage.getItem(CAPSULE_TEXT_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
 function getRelativeTimeString(date) {
   if (!date) return "";
   const now = new Date();
@@ -39,11 +51,41 @@ export default function Dashboard() {
   const [selectedProfile, setSelectedProfile] = useState("work");
 
   const [capsuleState, setCapsuleState] = useState("collapsed");
-  const [inputText, setInputText] = useState("");
+  // Height of the expanded capsule (in px). Initial 48 matches the pill
+  // resting height used by every setCapsuleHeight(48) reset call below.
+  // Measured live by resizeCapsule() whenever inputText or capsuleState
+  // changes (see the effect below).
   const [capsuleHeight, setCapsuleHeight] = useState(48);
+  // On mount, hydrate capsule text from sessionStorage (Phase 2c — preserve
+  // typed text across reloads / tab switches). Clearing happens after
+  // successful note submission, not here.
+  const [inputText, setInputText] = useState(getStoredCapsuleText);
   const [apiLoading, setApiLoading] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
   const textareaRef = useRef(null);
+  const debounceTimerRef = useRef(null);
+
+  // Debounced write to sessionStorage — 300ms after the user stops typing.
+  // Per the spec, this is only for the capsule textarea, not note editor
+  // content (which autosaves to Supabase via the folder page).
+  useEffect(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      try {
+        if (typeof window === "undefined") return;
+        if (inputText.trim()) {
+          window.sessionStorage.setItem(CAPSULE_TEXT_KEY, inputText);
+        } else {
+          window.sessionStorage.removeItem(CAPSULE_TEXT_KEY);
+        }
+      } catch {
+        // ignore write failures
+      }
+    }, 300);
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, [inputText]);
 
   const loadData = async () => {
     try {
@@ -107,6 +149,14 @@ export default function Dashboard() {
 
       const quickNotesFolderId = await getOrCreateQuickNotesFolder();
       await createNote(quickNotesFolderId, "", body);
+      // Clear persisted capsule text after successful submission (Phase 2c).
+      try {
+        if (typeof window !== "undefined") {
+          window.sessionStorage.removeItem(CAPSULE_TEXT_KEY);
+        }
+      } catch {
+        // ignore
+      }
       setCapsuleState("collapsed");
       setInputText("");
       setCapsuleHeight(48);
@@ -139,6 +189,17 @@ export default function Dashboard() {
               await saveEntities(data.entities);
             }
             await loadData();
+            // AI-organized output consumed the capsule text — clear persistence.
+            try {
+              if (typeof window !== "undefined") {
+                window.sessionStorage.removeItem(CAPSULE_TEXT_KEY);
+              }
+            } catch {
+              // ignore
+            }
+            setCapsuleState("collapsed");
+            setInputText("");
+            setCapsuleHeight(48);
           }
         } else {
           console.error("API failed to organize");
@@ -147,9 +208,6 @@ export default function Dashboard() {
         console.error("AI Organize error:", err);
       } finally {
         setApiLoading(false);
-        setCapsuleState("collapsed");
-        setInputText("");
-        setCapsuleHeight(48);
       }
     }
   };
@@ -244,16 +302,25 @@ export default function Dashboard() {
         </header>
 
         <div className="grid grid-cols-2 gap-3 mt-6">
-          {folders.map((folder) => {
+          {folders.map((folder, idx) => {
             const noteCount = noteCounts[folder.id] || 0;
+
+            // Each card delayed by 40ms after the previous one. Hero card
+            // is index 0 (first), then medium cards, then small cards — the
+            // folders array is already ordered that way by getFoldersForDashboard.
+            const staggerDelay = `${idx * 40}ms`;
+            // stagger-item: opacity 0 → 1 with rise, animation-delay set inline.
+            // folder-card: hover lift + active press (see globals.css).
+            const cardClassName = "stagger-item folder-card";
+            const cardStyle = { animationDelay: staggerDelay };
 
             if (folder.size === "hero") {
               return (
                 <Link
                   key={folder.id}
                   href={`/folder/${folder.id}`}
-                  className="col-span-2 relative overflow-hidden rounded-2xl p-5 block transition-all hover:scale-[1.01] active:scale-[0.99]"
-                  style={{ backgroundColor: "#1C1912" }}
+                  className={`col-span-2 relative overflow-hidden rounded-2xl p-5 block ${cardClassName}`}
+                  style={{ ...cardStyle, backgroundColor: "#1C1912" }}
                 >
                   <div
                     className="absolute top-0 right-0 w-3/5 h-3/5 pointer-events-none"
@@ -279,7 +346,8 @@ export default function Dashboard() {
                 <Link
                   key={folder.id}
                   href={`/folder/${folder.id}`}
-                  className="rounded-2xl p-4 bg-sage block transition-all hover:scale-[1.01] active:scale-[0.99]"
+                  className={`rounded-2xl p-4 bg-sage block ${cardClassName}`}
+                  style={cardStyle}
                 >
                   <h2 className="font-serif text-ink text-lg font-bold">{folder.name}</h2>
                   <p className="font-sans text-warm-gray-dark text-sm mt-1">
@@ -294,7 +362,8 @@ export default function Dashboard() {
                 <Link
                   key={folder.id}
                   href={`/folder/${folder.id}`}
-                  className="rounded-2xl p-4 bg-tan block transition-all hover:scale-[1.01] active:scale-[0.99]"
+                  className={`rounded-2xl p-4 bg-tan block ${cardClassName}`}
+                  style={cardStyle}
                 >
                   <h2 className="font-serif text-ink text-lg font-bold">{folder.name}</h2>
                   <p className="font-sans text-warm-gray-dark text-sm mt-1">
@@ -308,7 +377,8 @@ export default function Dashboard() {
               <Link
                 key={folder.id}
                 href={`/folder/${folder.id}`}
-                className="rounded-2xl p-4 bg-bone border border-warm-gray-light/30 block transition-all hover:scale-[1.01] active:scale-[0.99]"
+                className={`rounded-2xl p-4 bg-bone border border-warm-gray-light/30 block ${cardClassName}`}
+                style={cardStyle}
               >
                 <h2 className="font-serif text-ink text-base font-bold">{folder.name}</h2>
                 <p className="font-sans text-warm-gray text-sm mt-1">
@@ -328,29 +398,48 @@ export default function Dashboard() {
 
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center lg:left-[calc(50%+120px)]">
           {capsuleState === "options" && (
-            <div className="flex flex-col gap-2 items-center mb-3 animate-fade-in-up">
-              {inputText.trim() && (
-                <button
-                  onClick={() => handleOptionSelect("ai-organize")}
-                  disabled={apiLoading}
-                  className="bg-ink text-bone font-sans text-sm font-semibold px-6 py-3 rounded-full cursor-pointer hover:bg-ink/90 active:scale-[0.97] transition-all whitespace-nowrap shadow-md disabled:opacity-50"
-                >
-                  {apiLoading ? "Organizing with AI..." : "Organize with AI"}
-                </button>
-              )}
-              <button
-                onClick={() => handleOptionSelect("new-note")}
-                disabled={!inputText.trim()}
-                className="bg-ink text-bone font-sans text-sm font-semibold px-6 py-3 rounded-full cursor-pointer hover:bg-ink/90 active:scale-[0.97] transition-all whitespace-nowrap shadow-md disabled:opacity-50"
-              >
-                New note
-              </button>
-              <button
-                onClick={() => handleOptionSelect("second-brain")}
-                className="bg-ink text-bone font-sans text-sm font-semibold px-6 py-3 rounded-full cursor-pointer hover:bg-ink/90 active:scale-[0.97] transition-all whitespace-nowrap shadow-md"
-              >
-                Second brain
-              </button>
+            <div className="flex flex-col gap-2 items-center mb-3">
+              {(() => {
+                // Build the visible options list first so we can stagger
+                // them with a flat 30ms index regardless of which are shown.
+                const opts = [];
+                let idx = 0;
+                if (inputText.trim()) {
+                  opts.push(
+                    <button
+                      key="ai-organize"
+                      onClick={() => handleOptionSelect("ai-organize")}
+                      disabled={apiLoading}
+                      className="option-item bg-ink text-bone font-sans text-sm font-semibold px-6 py-3 rounded-full cursor-pointer hover:bg-ink/90 active:scale-[0.97] transition-all whitespace-nowrap shadow-md disabled:opacity-50"
+                      style={{ animationDelay: `${idx++ * 30}ms` }}
+                    >
+                      {apiLoading ? "Organizing with AI..." : "Organize with AI"}
+                    </button>
+                  );
+                }
+                opts.push(
+                  <button
+                    key="new-note"
+                    onClick={() => handleOptionSelect("new-note")}
+                    disabled={!inputText.trim()}
+                    className="option-item bg-ink text-bone font-sans text-sm font-semibold px-6 py-3 rounded-full cursor-pointer hover:bg-ink/90 active:scale-[0.97] transition-all whitespace-nowrap shadow-md disabled:opacity-50"
+                    style={{ animationDelay: `${idx++ * 30}ms` }}
+                  >
+                    New note
+                  </button>
+                );
+                opts.push(
+                  <button
+                    key="second-brain"
+                    onClick={() => handleOptionSelect("second-brain")}
+                    className="option-item bg-ink text-bone font-sans text-sm font-semibold px-6 py-3 rounded-full cursor-pointer hover:bg-ink/90 active:scale-[0.97] transition-all whitespace-nowrap shadow-md"
+                    style={{ animationDelay: `${idx++ * 30}ms` }}
+                  >
+                    Second brain
+                  </button>
+                );
+                return opts;
+              })()}
             </div>
           )}
 

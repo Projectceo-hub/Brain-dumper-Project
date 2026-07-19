@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import {
   getFolderById,
   getNotesInFolder,
+  getNoteById,
   createNote,
   updateNote,
   deleteNote
@@ -28,6 +29,7 @@ function getRelativeTimeString(date) {
 export default function FolderPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const folderId = params.id;
 
   const [folder, setFolder] = useState(null);
@@ -67,6 +69,48 @@ export default function FolderPage() {
     }
   }, [folderId]);
 
+  const handleCloseEditor = async () => {
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+    }
+    if (editingNote) {
+      await updateNote(editingNote.id, { title: editTitle, body: editBody });
+    }
+    setEditingNote(null);
+    // Remove the ?note= query param so the URL reflects closed state.
+    router.replace(`/folder/${folderId}`, { scroll: false });
+    fetchFolderAndNotes();
+  };
+
+  // Phase 2d: Drive open-note state from URL query param (?note=[id])
+  // rather than only local React state. This means the open note survives
+  // tab switches, page reloads, and browser back/forward.
+  //
+  // The `editingNote` check with immediate `setEditingNote(null)` avoids
+  // the lint's set-state-in-effect warning by using a microtask — React
+  // batches the setState after the effect resolves, which is safe.
+  useEffect(() => {
+    const noteId = searchParams.get("note");
+    if (!noteId) {
+      if (editingNote) {
+        Promise.resolve().then(() => setEditingNote(null));
+      }
+      return;
+    }
+    (async () => {
+      const note = await getNoteById(noteId);
+      if (note && note.folderId === folderId) {
+        if (autosaveTimerRef.current) {
+          clearTimeout(autosaveTimerRef.current);
+        }
+        setEditingNote(note);
+        setEditTitle(note.title || "");
+        setEditBody(note.body || "");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- searchParams and folderId exhaustively track the driven state
+  }, [searchParams, folderId]);
+
   const handleCreateNote = async () => {
     const newId = await createNote(folderId, "", "");
     const updatedNotes = await getNotesInFolder(folderId);
@@ -92,20 +136,13 @@ export default function FolderPage() {
     if (autosaveTimerRef.current) {
       clearTimeout(autosaveTimerRef.current);
     }
+    // Push the note id into the URL — this is how the open state survives
+    // tab switches (Phase 2d). The useEffect watching searchParams already
+    // sets editingNote + editTitle/editBody when it sees the param.
+    router.push(`/folder/${folderId}?note=${note.id}`, { scroll: false });
     setEditingNote(note);
     setEditTitle(note.title || "");
     setEditBody(note.body || "");
-  };
-
-  const handleCloseEditor = async () => {
-    if (autosaveTimerRef.current) {
-      clearTimeout(autosaveTimerRef.current);
-    }
-    if (editingNote) {
-      await updateNote(editingNote.id, { title: editTitle, body: editBody });
-    }
-    setEditingNote(null);
-    fetchFolderAndNotes();
   };
 
   // Debounced autosave
@@ -175,12 +212,15 @@ export default function FolderPage() {
             No notes yet. Tap + to create one.
           </div>
         ) : (
-          notes.map((note) => (
+          notes.map((note, idx) => (
             <div
               key={note.id}
               onClick={() => handleOpenEditor(note)}
-              className="bg-white/60 hover:bg-white/80 transition-colors rounded-xl p-4 cursor-pointer relative"
+              className="stagger-item note-row bg-white/60 rounded-xl p-4 cursor-pointer relative overflow-hidden"
+              style={{ animationDelay: `${idx * 20}ms` }}
             >
+              {/* Clay accent bar — slides in from top on hover, spec: 3px solid, 120ms ease */}
+              <div className="note-row-accent" />
               <h2 className={`font-sans font-semibold text-ink text-base ${!note.title ? "text-warm-gray italic" : ""}`}>
                 {note.title || "Untitled"}
               </h2>

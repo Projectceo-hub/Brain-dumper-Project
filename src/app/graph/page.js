@@ -722,24 +722,28 @@ function GraphContent() {
           </p>
         </div>
       ) : (
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onNodeClick={onNodeClick}
-          fitView
-          panOnDrag
-          zoomOnPinch
-          zoomOnScroll
-          minZoom={0.1}
-          maxZoom={2.5}
-          proOptions={{ hideAttribution: true }}
-          style={{ background: "#14110D" }}
-        >
-          <Background variant={BackgroundVariant.Dots} color="#3A352C" size={1} gap={24} />
-        </ReactFlow>
+        // Graph canvas fade-in: all nodes/edges snap into place, but the
+        // visual layer fades from 0→1 so the user sees a smooth reveal.
+        <div className="route-enter w-full h-full">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onNodeClick={onNodeClick}
+            fitView
+            panOnDrag
+            zoomOnPinch
+            zoomOnScroll
+            minZoom={0.1}
+            maxZoom={2.5}
+            proOptions={{ hideAttribution: true }}
+            style={{ background: "#14110D" }}
+          >
+            <Background variant={BackgroundVariant.Dots} color="#3A352C" size={1} gap={24} />
+          </ReactFlow>
+        </div>
       )}
 
       {/* Slide-out Sidebar Panel */}

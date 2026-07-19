@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { clearActiveSyncUser, initializeSyncForUser } from "@/lib/db";
+import RouteTransition from "@/components/RouteTransition";
 
 function AuthScreen() {
   const supabase = createClient();
@@ -155,6 +156,7 @@ export default function AuthGate({ children }) {
   const [loading, setLoading] = useState(configured);
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState("");
+  const lastSyncedUserIdRef = useRef(null);
 
   useEffect(() => {
     if (!configured) {
@@ -170,10 +172,15 @@ export default function AuthGate({ children }) {
 
       setSession(data.session ?? null);
 
-      if (data.session?.user?.id) {
+      // Only run initial sync when we actually have a new user id. The
+      // previous behaviour ran sync on every visibility-triggered getSession
+      // call — this is what caused the "page reloads on tab return" symptom.
+      const userId = data.session?.user?.id;
+      if (userId && userId !== lastSyncedUserIdRef.current) {
+        lastSyncedUserIdRef.current = userId;
         setSyncing(true);
         try {
-          await initializeSyncForUser(data.session.user.id);
+          await initializeSyncForUser(userId);
         } catch (error) {
           console.error("Initial sync failed:", error);
           setSyncError("Some notes are local only. Sync will retry when online.");
@@ -192,18 +199,38 @@ export default function AuthGate({ children }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
-      setSession(nextSession);
-      setSyncError("");
-
+      // Only update session state for genuine auth changes — NOT for
+      // visibility/focus-triggered re-validation that Supabase does
+      // internally. SIGNED_OUT is the only event that should clear state,
+      // TOKEN_REFRESHED and INITIAL_SESSION keep the existing user but nextSession
+      // may be a new session object (causing unnecessary re-renders).
       if (event === "SIGNED_OUT") {
+        setSession(null);
+        lastSyncedUserIdRef.current = null;
         clearActiveSyncUser();
         return;
       }
 
-      if (nextSession?.user?.id) {
+      // Only re-render + re-sync if the user id actually changed (e.g. sign-in
+      // as a different user, or first sign-in after sign-out). This is what
+      // prevents tab-refocus from re-syncing everything.
+      const nextUserId = nextSession?.user?.id;
+      if (!nextUserId) {
+        setSession(null);
+        return;
+      }
+
+      const userIdChanged = nextUserId !== lastSyncedUserIdRef.current;
+      const userIdCleared = !session && nextSession;
+
+      setSession(nextSession);
+      setSyncError("");
+
+      if (userIdChanged || userIdCleared) {
+        lastSyncedUserIdRef.current = nextUserId;
         setSyncing(true);
         try {
-          await initializeSyncForUser(nextSession.user.id);
+          await initializeSyncForUser(nextUserId);
         } catch (error) {
           console.error("Auth sync failed:", error);
           setSyncError("Some notes are local only. Sync will retry when online.");
@@ -244,7 +271,12 @@ export default function AuthGate({ children }) {
           {syncError}
         </div>
       )}
-      {children}
+      {/* 
+        Route transitions are wrapped here (inside AuthGate, around children)
+        rather than in layout.js so the swap between AuthScreen and the
+        authenticated app doesn't itself animate — only in-app route changes do.
+      */}
+      <RouteTransition>{children}</RouteTransition>
     </>
   );
 }
