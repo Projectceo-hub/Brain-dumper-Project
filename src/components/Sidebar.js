@@ -13,6 +13,15 @@ export default function Sidebar({ activeFolderId = null }) {
   const [email, setEmail] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+  // Lazy initializer runs on the client only (the component only mounts in
+  // the browser because it's inside AuthGate). Reading navigator.onLine
+  // here avoids calling setState synchronously inside the effect, which
+  // would trip react-hooks/set-state-in-effect.
+  const [online, setOnline] = useState(() =>
+    typeof navigator !== "undefined" ? navigator.onLine : true,
+  );
 
   const loadSidebar = useCallback(async () => {
     const folderList = await getAllFolders();
@@ -56,6 +65,56 @@ export default function Sidebar({ activeFolderId = null }) {
     });
   }, []);
 
+  // Track online/offline state for the indicator (Part B6). navigator.onLine
+  // is true/false at startup (read via lazy initializer above); the
+  // online/offline window events fire when it changes. We deliberately
+  // don't read navigator inside the effect body because that triggers a
+  // cascading-render warning.
+  useEffect(() => {
+    const handleOnline = () => setOnline(true);
+    const handleOffline = () => setOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  const handleExportVault = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setExportError("");
+    try {
+      const res = await fetch("/api/export", { method: "POST" });
+      if (res.status === 401) {
+        setExportError("Please log in to export.");
+        return;
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setExportError(body?.error || "Export failed.");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const stamp = new Date()
+        .toISOString()
+        .slice(0, 10);
+      a.download = `mindcanvas-vault-${stamp}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(err?.message || "Export failed.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleNewSpace = async () => {
     const name = window.prompt("Name your new space:");
     if (!name?.trim()) return;
@@ -90,6 +149,16 @@ export default function Sidebar({ activeFolderId = null }) {
         >
           MindCanvas
         </Link>
+        {/* Offline indicator (Part B6) — shows when navigator.onLine is false. */}
+        {!online && (
+          <p className="mt-2 flex items-center gap-1.5 font-sans text-[11px] text-warm-gray">
+            <span
+              aria-hidden="true"
+              className="inline-block h-1.5 w-1.5 rounded-full bg-warm-gray"
+            />
+            Offline — changes will sync when reconnected
+          </p>
+        )}
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4">
@@ -150,6 +219,34 @@ return (
       </nav>
 
       <div className="border-t border-graph-line/40 px-5 py-4">
+        <button
+          type="button"
+          onClick={handleExportVault}
+          disabled={exporting}
+          className="mb-3 flex w-full items-center gap-2 font-sans text-xs font-semibold text-warm-gray-light hover:text-bone transition-colors disabled:opacity-60"
+          title="Download all your notes as a ZIP of Markdown files"
+        >
+          {exporting ? (
+            <>
+              <span
+                aria-hidden="true"
+                className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-warm-gray-light border-t-transparent"
+              />
+              Exporting…
+            </>
+          ) : (
+            <>
+              <span aria-hidden="true" className="text-sm leading-none">
+                ↓
+              </span>
+              Export vault
+            </>
+          )}
+        </button>
+        {exportError && (
+          <p className="mb-2 font-sans text-[11px] text-clay">{exportError}</p>
+        )}
+
         <Link
           href="/settings/tokens"
           onClick={() => setMobileOpen(false)}
