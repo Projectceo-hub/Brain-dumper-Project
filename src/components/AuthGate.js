@@ -178,16 +178,21 @@ export default function AuthGate({ children }) {
       const userId = data.session?.user?.id;
       if (userId && userId !== lastSyncedUserIdRef.current) {
         lastSyncedUserIdRef.current = userId;
-        setSyncing(true);
-        try {
-          await initializeSyncForUser(userId);
-        } catch (error) {
-          console.error("Initial sync failed:", error);
-          setSyncError("Some notes are local only. Sync will retry when online.");
-        } finally {
-          if (mounted) {
-            setSyncing(false);
+        if (navigator.onLine) {
+          setSyncing(true);
+          try {
+            await initializeSyncForUser(userId);
+          } catch (error) {
+            console.error("Initial sync failed:", error);
+            setSyncError("Some notes are local only. Sync will retry when online.");
+          } finally {
+            if (mounted) {
+              setSyncing(false);
+            }
           }
+        } else {
+          // Offline — skip sync, Dexie already has the cached data
+          setSyncing(false);
         }
       }
 
@@ -228,13 +233,18 @@ export default function AuthGate({ children }) {
 
       if (userIdChanged || userIdCleared) {
         lastSyncedUserIdRef.current = nextUserId;
-        setSyncing(true);
-        try {
-          await initializeSyncForUser(nextUserId);
-        } catch (error) {
-          console.error("Auth sync failed:", error);
-          setSyncError("Some notes are local only. Sync will retry when online.");
-        } finally {
+        if (navigator.onLine) {
+          setSyncing(true);
+          try {
+            await initializeSyncForUser(nextUserId);
+          } catch (error) {
+            console.error("Auth sync failed:", error);
+            setSyncError("Some notes are local only. Sync will retry when online.");
+          } finally {
+            setSyncing(false);
+          }
+        } else {
+          // Offline — skip sync, Dexie already has the cached data
           setSyncing(false);
         }
       }

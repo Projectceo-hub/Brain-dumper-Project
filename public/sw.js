@@ -147,6 +147,17 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Next.js RSC prefetch/navigation requests — serve from cache if offline
+  if (url.searchParams.has("_rsc")) {
+    event.respondWith(
+      caches
+        .match(url.pathname, { ignoreSearch: true })
+        .then((cached) => cached || fetch(event.request))
+        .catch(() => caches.match("/")),
+    );
+    return;
+  }
+
   // Navigation requests — network-first with cache fallback.
   if (isNavigationRequest(request)) {
     event.respondWith(
