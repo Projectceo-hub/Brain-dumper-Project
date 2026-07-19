@@ -82,8 +82,27 @@ export default function Dashboard() {
         // ignore write failures
       }
     }, 300);
+
+    // Immediate flush when the tab becomes hidden — bypasses the 300ms
+    // debounce so the user's in-progress text is preserved even if they
+    // switch tabs mid-keystroke. Fires on visibilitychange ONLY when
+    // transitioning to "hidden" (not on return).
+    const flushOnHide = () => {
+      if (document.visibilityState === "hidden") {
+        try {
+          if (inputText.trim()) {
+            window.sessionStorage.setItem(CAPSULE_TEXT_KEY, inputText);
+          }
+        } catch {
+          // ignore
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", flushOnHide);
+
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      document.removeEventListener("visibilitychange", flushOnHide);
     };
   }, [inputText]);
 
