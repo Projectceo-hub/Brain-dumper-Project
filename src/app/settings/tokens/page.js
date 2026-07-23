@@ -139,12 +139,13 @@ export default function TokensSettingsPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-bone">
+    <div className="flex min-h-screen bg-bone" style={{ background: "var(--bg)" }}>
       <Sidebar />
 
-      <div className="relative min-h-screen flex-1 px-5 pt-6 pb-8 lg:pl-5 pl-14">
+      <div className="relative min-h-screen flex-1 px-5 pt-6 pb-8 lg:pl-5 pl-14" style={{ background: "var(--bg)" }}>
         <div
-          className="flex items-center gap-1 text-warm-gray hover:text-ink transition-colors cursor-pointer text-sm font-sans"
+          className="flex items-center gap-1 transition-colors cursor-pointer text-sm font-sans"
+          style={{ color: "var(--text-muted)" }}
           onClick={() => router.push("/")}
         >
           <span>←</span>
@@ -152,33 +153,48 @@ export default function TokensSettingsPage() {
         </div>
 
         <header className="mt-4">
-          <p className="text-warm-gray-light font-sans text-xs uppercase tracking-widest font-semibold">
+          <p
+            className="font-sans text-xs uppercase tracking-widest font-semibold"
+            style={{ color: "var(--text-muted)" }}
+          >
             SETTINGS
           </p>
-          <h1 className="font-serif text-ink text-3xl font-bold mt-1">
+          <h1
+            className="font-serif text-3xl font-bold mt-1"
+            style={{ color: "var(--text-primary)" }}
+          >
             API tokens
           </h1>
-          <p className="text-warm-gray font-sans text-sm mt-1 max-w-2xl leading-relaxed">
+          <p
+            className="font-sans text-sm mt-1 max-w-2xl leading-relaxed"
+            style={{ color: "var(--text-secondary)" }}
+          >
             Connect MindCanvas to Claude Desktop, Claude.ai Connectors, Cursor, or any
             other MCP client. Generate a personal token below and paste it into your
-            client&apos;s config. Your token only gives access to <span className="font-semibold">your</span> own MindCanvas data.
+            client's config. Your token only gives access to <span className="font-semibold">your</span> own MindCanvas data.
           </p>
         </header>
 
         {error && (
-          <p className="mt-4 font-sans text-sm text-clay bg-clay/10 rounded-lg px-3 py-2">
+          <p
+            className="mt-4 font-sans text-sm rounded-lg px-3 py-2"
+            style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 10%, transparent)" }}
+          >
             {error}
           </p>
         )}
 
         <section className="mt-8 max-w-3xl">
-          <div className="bg-white/60 rounded-2xl p-5">
-            <h2 className="font-serif text-ink text-xl font-bold">MCP endpoint</h2>
-            <p className="font-sans text-warm-gray text-sm mt-1 leading-relaxed">
+          <div className="rounded-2xl p-5" style={{ background: "var(--surface)" }}>
+            <h2 className="font-serif text-xl font-bold" style={{ color: "var(--text-primary)" }}>MCP endpoint</h2>
+            <p className="font-sans text-sm mt-1 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
               This is the URL your MCP client will POST to. Use it as-is.
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <code className="flex-1 min-w-[260px] bg-bone border border-warm-gray-light/40 rounded-lg px-3 py-2 font-sans text-xs text-ink font-mono break-all">
+              <code
+                className="themed-placeholder flex-1 min-w-[260px] border rounded-lg px-3 py-2 font-sans text-xs font-mono break-all"
+                style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--text-primary)" }}
+              >
                 {deployUrl || `https://YOUR_DEPLOY_URL${MCP_ENDPOINT_PATH}`}
               </code>
               <button
@@ -191,16 +207,16 @@ export default function TokensSettingsPage() {
             </div>
           </div>
 
-          <div className="bg-white/60 rounded-2xl p-5 mt-4">
-            <h2 className="font-serif text-ink text-xl font-bold">Generate a token</h2>
-            <p className="font-sans text-warm-gray text-sm mt-1 leading-relaxed">
+          <div className="rounded-2xl p-5 mt-4" style={{ background: "var(--surface)" }}>
+            <h2 className="font-serif text-xl font-bold" style={{ color: "var(--text-primary)" }}>Generate a token</h2>
+            <p className="font-sans text-sm mt-1 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
               The raw token is shown exactly <span className="font-semibold">once</span> after
               generation. Copy it now — MindCanvas only stores a hash, so it can never be
               recovered later.
             </p>
             <form onSubmit={handleCreate} className="mt-4 flex flex-wrap items-end gap-3">
               <label className="flex flex-col gap-1 flex-1 min-w-[220px]">
-                <span className="font-sans text-xs text-warm-gray font-semibold uppercase tracking-wider">
+                <span className="font-sans text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
                   Label (optional)
                 </span>
                 <input
@@ -209,49 +225,64 @@ export default function TokensSettingsPage() {
                   onChange={(e) => setLabel(e.target.value)}
                   placeholder="e.g. Claude Desktop"
                   maxLength={60}
-                  className="bg-bone border border-warm-gray-light/40 rounded-lg px-3 py-2.5 font-sans text-sm text-ink placeholder-warm-gray outline-none focus:border-clay transition-colors"
+                  className="themed-placeholder border rounded-lg px-3 py-2.5 font-sans text-sm outline-none focus:border-clay transition-colors"
+                  style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--text-primary)" }}
                 />
               </label>
               <button
                 type="submit"
                 disabled={creating}
-                className="rounded-full bg-clay px-5 py-2.5 font-sans text-sm font-semibold text-bone shadow-md transition-all hover:bg-clay/90 active:scale-[0.98] disabled:opacity-50"
+                className="rounded-full px-5 py-2.5 font-sans text-sm font-semibold shadow-md transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50"
+                style={{ background: "var(--accent)", color: "#fff" }}
               >
                 {creating ? "Generating..." : "Generate token"}
               </button>
             </form>
 
             {newlyCreated && (
-              <div className="mt-5 border-2 border-pine rounded-xl p-4 bg-pine/5">
-                <p className="font-sans text-xs text-pine font-semibold uppercase tracking-wider">
+              <div
+                className="mt-5 rounded-xl p-4"
+                style={{ border: "2px solid var(--accent-secondary)", background: "color-mix(in srgb, var(--accent-secondary) 8%, transparent)" }}
+              >
+                <p
+                  className="font-sans text-xs font-semibold uppercase tracking-wider"
+                  style={{ color: "var(--accent-secondary)" }}
+                >
                   Your new token — copy it now
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <code className="flex-1 min-w-[260px] bg-bone border border-warm-gray-light/40 rounded-lg px-3 py-2 font-sans text-xs text-ink font-mono break-all">
+                  <code
+                    className="themed-placeholder flex-1 min-w-[260px] border rounded-lg px-3 py-2 font-sans text-xs font-mono break-all"
+                    style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--text-primary)" }}
+                  >
                     {newlyCreated.token}
                   </code>
                   <button
                     type="button"
                     onClick={() => handleCopy(newlyCreated.token, "token")}
-                    className="rounded-full border border-pine text-pine hover:bg-pine hover:text-bone font-sans text-sm px-4 py-2 transition-all active:scale-[0.98] font-semibold"
+                    className="rounded-full font-sans text-sm px-4 py-2 transition-all active:scale-[0.98] font-semibold"
+                    style={{ border: "1px solid var(--accent-secondary)", color: "var(--accent-secondary)" }}
                   >
                     {copied === "token" ? "Copied!" : "Copy token"}
                   </button>
                 </div>
-                <p className="mt-3 font-sans text-xs text-warm-gray leading-relaxed">
-                  Label: <span className="text-ink font-semibold">{newlyCreated.label || "default"}</span>
-                  {" · "}Prefix shown in list: <span className="font-mono text-ink">{newlyCreated.tokenPrefix}…</span>
+                <p
+                  className="mt-3 font-sans text-xs leading-relaxed"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  Label: <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{newlyCreated.label || "default"}</span>
+                  {" · "}Prefix shown in list: <span className="font-mono" style={{ color: "var(--text-primary)" }}>{newlyCreated.tokenPrefix}…</span>
                 </p>
               </div>
             )}
           </div>
 
-          <div className="bg-white/60 rounded-2xl p-5 mt-4">
-            <h2 className="font-serif text-ink text-xl font-bold">Existing tokens</h2>
+          <div className="rounded-2xl p-5 mt-4" style={{ background: "var(--surface)" }}>
+            <h2 className="font-serif text-xl font-bold" style={{ color: "var(--text-primary)" }}>Existing tokens</h2>
             {loading ? (
-              <p className="font-sans text-warm-gray mt-3 animate-pulse">Loading...</p>
+              <p className="font-sans mt-3 animate-pulse" style={{ color: "var(--text-muted)" }}>Loading...</p>
             ) : tokens.length === 0 ? (
-              <p className="font-sans text-warm-gray mt-3 text-sm">
+              <p className="font-sans mt-3 text-sm" style={{ color: "var(--text-muted)" }}>
                 No tokens yet. Generate one above to connect your first MCP client.
               </p>
             ) : (
@@ -261,16 +292,18 @@ export default function TokensSettingsPage() {
                   return (
                     <li
                       key={t.id}
-                      className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 ${
-                        revoked ? "opacity-60 border-warm-gray-light/30" : "border-warm-gray-light/40"
-                      }`}
+                      className="flex flex-wrap items-center gap-3 rounded-xl px-4 py-3"
+                      style={{
+                        border: `1px solid ${revoked ? "var(--border)" : "var(--border)"}`,
+                        opacity: revoked ? 0.6 : 1,
+                      }}
                     >
                       <div className="flex-1 min-w-[200px]">
-                        <p className="font-sans text-sm text-ink font-semibold">
+                        <p className="font-sans text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                           {t.label || "default"}
-                          {revoked && <span className="ml-2 text-warm-gray italic">revoked</span>}
+                          {revoked && <span className="ml-2 italic" style={{ color: "var(--text-muted)" }}>revoked</span>}
                         </p>
-                        <p className="font-sans text-xs text-warm-gray mt-0.5 font-mono">
+                        <p className="font-sans text-xs mt-0.5 font-mono" style={{ color: "var(--text-muted)" }}>
                           {t.token_prefix}…{" · "}created {getRelativeTimeString(t.created_at)}
                           {" · "}last used {getRelativeTimeString(t.last_used_at)}
                         </p>
@@ -279,7 +312,8 @@ export default function TokensSettingsPage() {
                         <button
                           type="button"
                           onClick={() => handleRevoke(t.id)}
-                          className="font-sans text-xs font-semibold text-warm-gray hover:text-clay transition-colors cursor-pointer"
+                          className="font-sans text-xs font-semibold transition-colors cursor-pointer"
+                          style={{ color: "var(--text-muted)" }}
                         >
                           Revoke
                         </button>
@@ -291,18 +325,23 @@ export default function TokensSettingsPage() {
             )}
           </div>
 
-          <div className="bg-white/60 rounded-2xl p-5 mt-4">
-            <h2 className="font-serif text-ink text-xl font-bold">Connecting Claude Desktop</h2>
-            <p className="font-sans text-warm-gray text-sm mt-1 leading-relaxed">
-              Open your <code className="bg-bone px-1.5 py-0.5 rounded text-xs">claude_desktop_config.json</code> file
+          <div className="rounded-2xl p-5 mt-4" style={{ background: "var(--surface)" }}>
+            <h2 className="font-serif text-xl font-bold" style={{ color: "var(--text-primary)" }}>Connecting Claude Desktop</h2>
+            <p className="font-sans text-sm mt-1 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+              Open your <code className="px-1.5 py-0.5 rounded text-xs" style={{ background: "var(--bg)", color: "var(--text-primary)" }}>claude_desktop_config.json</code> file
               and add MindCanvas as an MCP server, then restart Claude Desktop. The file lives at:
             </p>
-            <ul className="mt-2 font-sans text-xs text-warm-gray leading-relaxed list-disc ml-5">
+            <ul className="mt-2 font-sans text-xs leading-relaxed list-disc ml-5" style={{ color: "var(--text-secondary)" }}>
               <li>macOS: <code className="font-mono">~/Library/Application Support/Claude/claude_desktop_config.json</code></li>
               <li>Windows: <code className="font-mono">%AppData%\Claude\claude_desktop_config.json</code></li>
             </ul>
-            <pre className="mt-3 bg-bone border border-warm-gray-light/40 rounded-lg p-3 font-mono text-xs text-ink overflow-x-auto whitespace-pre">{CLAUDE_DESKTOP_CONFIG_SAMPLE}</pre>
-            <p className="font-sans text-xs text-warm-gray mt-3 leading-relaxed">
+            <pre
+              className="mt-3 border rounded-lg p-3 font-mono text-xs overflow-x-auto whitespace-pre"
+              style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--text-primary)" }}
+            >
+              {CLAUDE_DESKTOP_CONFIG_SAMPLE}
+            </pre>
+            <p className="font-sans text-xs mt-3 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
               Replace <code className="font-mono">{"<PASTE_MINDCANVAS_URL>"}</code> with{" "}
               <code className="font-mono">{deployUrl || "https://YOUR_DEPLOY_URL/api/mcp"}</code> and{" "}
               <code className="font-mono">{"<PASTE_TOKEN_HERE>"}</code> with your generated token (starts with{" "}

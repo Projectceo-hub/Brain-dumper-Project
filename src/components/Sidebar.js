@@ -11,6 +11,7 @@ export default function Sidebar({ activeFolderId = null }) {
   const [folders, setFolders] = useState([]);
   const [noteCounts, setNoteCounts] = useState({});
   const [email, setEmail] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -62,7 +63,22 @@ export default function Sidebar({ activeFolderId = null }) {
     if (!supabase) return;
     supabase.auth.getUser().then(({ data }) => {
       setEmail(data.user?.email || "");
+      setDisplayName(data.user?.user_metadata?.display_name || "");
     });
+
+    // Refresh display_name when settings page updates it (Part B).
+    const refresh = () => {
+      supabase.auth.getUser().then(({ data }) => {
+        setEmail(data.user?.email || "");
+        setDisplayName(data.user?.user_metadata?.display_name || "");
+      });
+    };
+    window.addEventListener("mindcanvas:profile-updated", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.removeEventListener("mindcanvas:profile-updated", refresh);
+      window.removeEventListener("focus", refresh);
+    };
   }, []);
 
   // Track online/offline state for the indicator (Part B6). navigator.onLine
@@ -139,19 +155,23 @@ export default function Sidebar({ activeFolderId = null }) {
   const sidebarContent = (
     <aside
       className="flex h-full w-[240px] shrink-0 flex-col bg-ink text-bone"
-      style={{ backgroundColor: "#1C1912" }}
+      style={{ backgroundColor: "var(--sidebar-bg)" }}
     >
       <div className="border-b border-graph-line/40 px-5 py-6">
         <Link
           href="/"
           onClick={() => setMobileOpen(false)}
           className="font-serif text-xl font-bold tracking-tight text-bone hover:text-clay transition-colors"
+          style={{ color: "var(--sidebar-text)" }}
         >
           MindCanvas
         </Link>
         {/* Offline indicator (Part B6) — shows when navigator.onLine is false. */}
         {!online && (
-          <p className="mt-2 flex items-center gap-1.5 font-sans text-[11px] text-warm-gray">
+          <p
+            className="mt-2 flex items-center gap-1.5 font-sans text-[11px] text-warm-gray"
+            style={{ color: "var(--sidebar-text-muted)" }}
+          >
             <span
               aria-hidden="true"
               className="inline-block h-1.5 w-1.5 rounded-full bg-warm-gray"
@@ -162,7 +182,10 @@ export default function Sidebar({ activeFolderId = null }) {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        <p className="px-2 font-sans text-[10px] font-semibold uppercase tracking-widest text-warm-gray-light">
+        <p
+          className="px-2 font-sans text-[10px] font-semibold uppercase tracking-widest text-warm-gray-light"
+          style={{ color: "var(--sidebar-text-muted)" }}
+        >
           Spaces
         </p>
         <ul className="mt-2 flex flex-col gap-0.5">
@@ -179,13 +202,19 @@ return (
                       ? "text-bone font-semibold"
                       : "text-warm-gray-light hover:bg-white/5 hover:text-bone"
                   }`}
+                  style={{ color: active ? "var(--sidebar-text)" : "var(--sidebar-text-muted)" }}
                 >
                   {/* Active indicator: 3px clay bar on the left, slides in via the animation */}
                   {active && (
                     <span className="absolute left-0 top-1 bottom-1 w-[3px] bg-clay rounded-r-sm sidebar-indicator" />
                   )}
                   <span className="truncate">{folder.name}</span>
-                  <span className="ml-2 shrink-0 text-xs text-warm-gray">{count}</span>
+                  <span
+                    className="ml-2 shrink-0 text-xs text-warm-gray"
+                    style={{ color: "var(--sidebar-text-muted)" }}
+                  >
+                    {count}
+                  </span>
                 </Link>
               </li>
             );
@@ -196,6 +225,7 @@ return (
           onClick={handleNewSpace}
           disabled={creating}
           className="mt-3 w-full rounded-lg px-3 py-2.5 text-left font-sans text-sm text-warm-gray-light hover:bg-white/5 hover:text-bone transition-colors disabled:opacity-50"
+          style={{ color: "var(--sidebar-text-muted)" }}
         >
           {creating ? "Creating..." : "+ New space"}
         </button>
@@ -210,6 +240,7 @@ return (
               ? "text-bone font-semibold"
               : "text-warm-gray-light hover:bg-white/5 hover:text-bone"
           }`}
+          style={{ color: isGraph ? "var(--sidebar-text)" : "var(--sidebar-text-muted)" }}
         >
           {isGraph && (
             <span className="absolute left-0 top-1 bottom-1 w-[3px] bg-clay rounded-r-sm sidebar-indicator" />
@@ -224,6 +255,7 @@ return (
           onClick={handleExportVault}
           disabled={exporting}
           className="mb-3 flex w-full items-center gap-2 font-sans text-xs font-semibold text-warm-gray-light hover:text-bone transition-colors disabled:opacity-60"
+          style={{ color: "var(--sidebar-text-muted)" }}
           title="Download all your notes as a ZIP of Markdown files"
         >
           {exporting ? (
@@ -231,6 +263,7 @@ return (
               <span
                 aria-hidden="true"
                 className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-warm-gray-light border-t-transparent"
+                style={{ borderColor: "var(--sidebar-text-muted)" }}
               />
               Exporting…
             </>
@@ -248,20 +281,27 @@ return (
         )}
 
         <Link
-          href="/settings/tokens"
+          href="/settings"
           onClick={() => setMobileOpen(false)}
-          className="block font-sans text-xs font-semibold text-warm-gray-light hover:text-bone transition-colors mb-2"
+          className="flex items-center gap-1.5 font-sans text-xs font-semibold text-warm-gray-light hover:text-bone transition-colors mb-2"
+          style={{ color: "var(--sidebar-text-muted)" }}
         >
-          API tokens & MCP
+          <span aria-hidden="true" className="text-sm leading-none">⚙</span>
+          Settings
         </Link>
-        {email && (
-          <p className="truncate font-sans text-xs text-warm-gray mb-2" title={email}>
-            {email}
+        {(displayName || email) && (
+          <p
+            className="truncate font-sans text-xs text-warm-gray mb-2"
+            style={{ color: "var(--sidebar-text-muted)" }}
+            title={email}
+          >
+            {displayName || email}
           </p>
         )}
         <button
           onClick={handleLogout}
           className="font-sans text-xs font-semibold text-warm-gray-light hover:text-bone transition-colors"
+          style={{ color: "var(--sidebar-text-muted)" }}
         >
           Log out
         </button>
@@ -276,6 +316,7 @@ return (
         type="button"
         onClick={() => setMobileOpen(true)}
         className="fixed left-4 top-4 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-ink text-bone shadow-md lg:hidden"
+        style={{ backgroundColor: "var(--sidebar-bg)", color: "var(--sidebar-text)" }}
         aria-label="Open menu"
       >
         <span className="text-lg leading-none">☰</span>

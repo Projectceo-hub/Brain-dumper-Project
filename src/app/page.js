@@ -245,7 +245,7 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bone">
+      <div className="flex min-h-screen items-center justify-center bg-bone" style={{ background: "var(--bg)" }}>
         <p className="font-sans text-warm-gray animate-pulse">Loading MindCanvas...</p>
       </div>
     );
@@ -253,7 +253,7 @@ export default function Dashboard() {
 
   if (showOnboarding) {
     return (
-      <div className="flex flex-col min-h-screen bg-bone items-center justify-center px-6">
+      <div className="flex flex-col min-h-screen bg-bone items-center justify-center px-6" style={{ background: "var(--bg)" }}>
         <h1 className="font-serif text-ink text-4xl text-center font-bold tracking-tight">
           What&apos;s on your mind?
         </h1>
@@ -298,7 +298,7 @@ export default function Dashboard() {
   const capsuleRadius = capsuleHeight > 56 ? "22px" : "9999px";
 
   return (
-    <div className="flex min-h-screen bg-bone">
+    <div className="flex min-h-screen bg-bone" style={{ background: "var(--bg)" }}>
       <Sidebar />
 
       <div className="relative min-h-screen flex-1 px-5 pt-8 pb-32 select-none lg:pl-5 pl-14">

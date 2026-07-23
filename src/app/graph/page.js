@@ -681,7 +681,7 @@ function GraphContent() {
   };
 
   return (
-    <div className="w-screen h-screen bg-graph-bg relative select-none">
+    <div className="w-screen h-screen bg-graph-bg relative select-none" style={{ background: "var(--bg)" }}>
       {/* Header Overlay */}
       <header className="fixed top-0 left-0 right-0 z-10 flex items-center gap-3 px-5 pt-5 pointer-events-none">
         <button
@@ -714,7 +714,7 @@ function GraphContent() {
 
       {/* Main Graph Canvas */}
       {loading || aiMapping ? (
-        <div className="w-full h-full flex flex-col items-center justify-center bg-graph-bg gap-3">
+        <div className="w-full h-full flex flex-col items-center justify-center bg-graph-bg gap-3" style={{ background: "var(--bg)" }}>
           <p className="font-sans text-warm-gray animate-pulse">
             {aiMapping
               ? "AI is mapping this note into a structured mindmap..."
@@ -806,7 +806,7 @@ export default function GraphPage() {
   return (
     <Suspense
       fallback={
-        <div className="w-screen h-screen flex items-center justify-center bg-graph-bg">
+        <div className="w-screen h-screen flex items-center justify-center bg-graph-bg" style={{ background: "var(--bg)" }}>
           <p className="font-sans text-warm-gray animate-pulse">Loading visual brain...</p>
         </div>
       }

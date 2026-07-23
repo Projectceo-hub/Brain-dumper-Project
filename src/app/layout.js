@@ -2,6 +2,7 @@ import { Inter } from "next/font/google";
 import { Fraunces } from "next/font/google";
 import AuthGate from "@/components/AuthGate";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import ThemeProvider from "@/components/ThemeProvider";
 import "./globals.css";
 
 const inter = Inter({
@@ -42,8 +43,10 @@ export default function RootLayout({ children }) {
       lang="en"
       className={`${inter.variable} ${fraunces.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
-        <AuthGate>{children}</AuthGate>
+      <body className="min-h-full flex flex-col" style={{ background: "var(--bg)" }}>
+        <ThemeProvider>
+          <AuthGate>{children}</AuthGate>
+        </ThemeProvider>
         <ServiceWorkerRegistrar />
       </body>
     </html>

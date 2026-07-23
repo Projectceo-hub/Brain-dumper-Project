@@ -1,8 +1,108 @@
 @import "tailwindcss";
 
-:root {
+/* ------------------------------------------------------------------ */
+/* Theme system — CSS custom properties on the <html> element.        */
+/* The data-theme attribute switches the active theme. The :root      */
+/* block sets sane defaults that exactly match the "Warm Canvas"      */
+/* design so the app looks correct even before ThemeProvider mounts.  */
+/* ------------------------------------------------------------------ */
+:root,
+[data-theme="warm-canvas"] {
+  --bg: #F2EDE4;
+  --surface: rgba(255, 255, 255, 0.6);
+  --surface-solid: #FFFFFF;
+  --text-primary: #1C1912;
+  --text-secondary: #6B6459;
+  --text-muted: #8A8071;
+  --accent: #C4571F;
+  --accent-secondary: #3D6B5C;
+  --sidebar-bg: #1C1912;
+  --sidebar-text: #F2EDE4;
+  --sidebar-text-muted: #8A8071;
+  --border: rgba(139, 128, 113, 0.25);
+  --card-hover: rgba(237, 223, 203, 0.55);
+
+  /* Keep legacy aliases in sync so existing Tailwind helpers that read
+     --background / --foreground (body rule below + Tailwind theme inline)
+     stay consistent with the active theme's --bg / --text-primary. */
   --background: #F2EDE4;
   --foreground: #1C1912;
+}
+
+[data-theme="dark-studio"] {
+  --bg: #1A1815;
+  --surface: #252220;
+  --surface-solid: #252220;
+  --text-primary: #E8E0D4;
+  --text-secondary: #A89880;
+  --text-muted: #7A6E62;
+  --accent: #D4651F;
+  --accent-secondary: #4A8A6F;
+  --sidebar-bg: #111009;
+  --sidebar-text: #E8E0D4;
+  --sidebar-text-muted: #7A6E62;
+  --border: rgba(232, 224, 212, 0.12);
+  --card-hover: rgba(232, 224, 212, 0.06);
+
+  --background: #1A1815;
+  --foreground: #E8E0D4;
+}
+
+[data-theme="midnight"] {
+  --bg: #0A0A0A;
+  --surface: #161616;
+  --surface-solid: #161616;
+  --text-primary: #F0EDE8;
+  --text-secondary: #9A9088;
+  --text-muted: #6A6058;
+  --accent: #C4571F;
+  --accent-secondary: #3D8A6F;
+  --sidebar-bg: #050505;
+  --sidebar-text: #F0EDE8;
+  --sidebar-text-muted: #6A6058;
+  --border: rgba(240, 237, 232, 0.1);
+  --card-hover: rgba(240, 237, 232, 0.05);
+
+  --background: #0A0A0A;
+  --foreground: #F0EDE8;
+}
+
+[data-theme="sepia"] {
+  --bg: #F5EDD6;
+  --surface: rgba(253, 246, 227, 0.8);
+  --surface-solid: #FDF6E3;
+  --text-primary: #2C1F0E;
+  --text-secondary: #5C4A2A;
+  --text-muted: #8C7A5A;
+  --accent: #A8380A;
+  --accent-secondary: #4A6A30;
+  --sidebar-bg: #2C1F0E;
+  --sidebar-text: #F5EDD6;
+  --sidebar-text-muted: #8C7A5A;
+  --border: rgba(44, 31, 14, 0.2);
+  --card-hover: rgba(44, 31, 14, 0.06);
+
+  --background: #F5EDD6;
+  --foreground: #2C1F0E;
+}
+
+[data-theme="slate"] {
+  --bg: #EEF2F7;
+  --surface: rgba(255, 255, 255, 0.75);
+  --surface-solid: #FFFFFF;
+  --text-primary: #0F1923;
+  --text-secondary: #4A5568;
+  --text-muted: #718096;
+  --accent: #C4571F;
+  --accent-secondary: #2B5DA8;
+  --sidebar-bg: #0F1923;
+  --sidebar-text: #EEF2F7;
+  --sidebar-text-muted: #718096;
+  --border: rgba(15, 25, 35, 0.15);
+  --card-hover: rgba(15, 25, 35, 0.05);
+
+  --background: #EEF2F7;
+  --foreground: #0F1923;
 }
 
 @theme inline {
@@ -27,10 +127,16 @@
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg);
+  color: var(--text-primary);
   font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
+
+/* Theme-aware placeholder. Input/textarea elements use this class via
+   className="themed-placeholder" alongside the regular text colour
+   inline style — ::placeholder can't be styled via React inline style, so
+   we drive it from the active theme's --text-muted variable here. */
+.themed-placeholder::placeholder { color: var(--text-muted); }
 
 /* ------------------------------------------------------------------ */
 /* Route transition animations                                         */
@@ -233,7 +339,7 @@ body {
   top: 0;
   bottom: 0;
   width: 3px;
-  background-color: var(--color-clay);
+  background-color: var(--accent);
   transform: scaleY(0);
   transform-origin: top center;
   transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -249,7 +355,7 @@ body {
 }
 
 .note-row:hover {
-  background-color: rgba(237, 223, 203, 0.55); /* tan at low alpha — warmer */
+  background-color: var(--card-hover);
 }
 
 /* ------------------------------------------------------------------ */

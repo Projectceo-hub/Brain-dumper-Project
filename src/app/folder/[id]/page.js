@@ -170,14 +170,14 @@ export default function FolderPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bone">
+      <div className="flex min-h-screen items-center justify-center bg-bone" style={{ background: "var(--bg)" }}>
         <p className="font-sans text-warm-gray animate-pulse">Loading notes...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-bone">
+    <div className="flex min-h-screen bg-bone" style={{ background: "var(--bg)" }}>
       <Sidebar activeFolderId={folderId} />
 
       <div className="relative min-h-screen flex-1 px-5 pt-6 pb-8 lg:pl-5 pl-14">
@@ -216,24 +216,34 @@ export default function FolderPage() {
             <div
               key={note.id}
               onClick={() => handleOpenEditor(note)}
-              className="stagger-item note-row bg-white/60 rounded-xl p-4 cursor-pointer relative overflow-hidden"
-              style={{ animationDelay: `${idx * 20}ms` }}
+              className="stagger-item note-row rounded-xl p-4 cursor-pointer relative overflow-hidden"
+              style={{ animationDelay: `${idx * 20}ms`, background: "var(--surface)" }}
             >
               {/* Clay accent bar — slides in from top on hover, spec: 3px solid, 120ms ease */}
               <div className="note-row-accent" />
-              <h2 className={`font-sans font-semibold text-ink text-base ${!note.title ? "text-warm-gray italic" : ""}`}>
+              <h2
+                className={`font-sans font-semibold text-base ${!note.title ? "italic" : ""}`}
+                style={{ color: note.title ? "var(--text-primary)" : "var(--text-muted)" }}
+              >
                 {note.title || "Untitled"}
               </h2>
-              <p className="font-sans text-warm-gray text-sm mt-1 line-clamp-2 leading-relaxed">
+              <p
+                className="font-sans text-sm mt-1 line-clamp-2 leading-relaxed"
+                style={{ color: "var(--text-secondary)" }}
+              >
                 {note.body ? note.body.slice(0, 150) : "No content yet"}
               </p>
               <div className="flex items-center justify-between mt-4">
-                <span className="text-warm-gray-light text-xs font-sans">
+                <span
+                  className="text-xs font-sans"
+                  style={{ color: "var(--text-muted)" }}
+                >
                   {getRelativeTimeString(note.updatedAt)}
                 </span>
                 <button
                   onClick={(e) => handleDeleteNote(e, note.id)}
-                  className="text-warm-gray-light hover:text-clay text-xs font-sans transition-colors cursor-pointer"
+                  className="text-xs font-sans transition-colors cursor-pointer"
+                  style={{ color: "var(--text-muted)" }}
                 >
                   Delete
                 </button>
@@ -245,10 +255,11 @@ export default function FolderPage() {
 
       {/* Inline Editor Overlay */}
       {editingNote && (
-        <div className="fixed inset-0 bg-bone z-50 flex flex-col px-5 pt-6 pb-8 overflow-y-auto">
+        <div className="fixed inset-0 bg-bone z-50 flex flex-col px-5 pt-6 pb-8 overflow-y-auto" style={{ background: "var(--bg)" }}>
           {/* Back button */}
           <div
-            className="flex items-center gap-1 text-warm-gray hover:text-ink transition-colors cursor-pointer text-sm font-sans"
+            className="flex items-center gap-1 transition-colors cursor-pointer text-sm font-sans"
+            style={{ color: "var(--text-muted)" }}
             onClick={handleCloseEditor}
           >
             <span>←</span>
@@ -261,7 +272,8 @@ export default function FolderPage() {
             value={editTitle}
             onChange={(e) => handleTitleChange(e.target.value)}
             placeholder="Note title"
-            className="w-full font-serif text-ink text-2xl bg-transparent outline-none border-none mt-4 placeholder-warm-gray-light font-bold"
+            className="themed-placeholder w-full font-serif text-2xl bg-transparent outline-none border-none mt-4 font-bold"
+            style={{ color: "var(--text-primary)" }}
           />
 
           {/* Body */}
@@ -269,11 +281,15 @@ export default function FolderPage() {
             value={editBody}
             onChange={(e) => handleBodyChange(e.target.value)}
             placeholder="Start writing..."
-            className="w-full flex-1 font-sans text-ink text-base bg-transparent outline-none border-none mt-4 resize-none placeholder-warm-gray-light leading-relaxed min-h-[300px]"
+            className="themed-placeholder w-full flex-1 font-sans text-base bg-transparent outline-none border-none mt-4 resize-none leading-relaxed min-h-[300px]"
+            style={{ color: "var(--text-primary)" }}
           />
 
           {/* Visualize Button */}
-          <div className="mt-8 border-t border-warm-gray-light/20 pt-4 flex justify-center">
+          <div
+            className="mt-8 pt-4 flex justify-center"
+            style={{ borderTop: "1px solid var(--border)" }}
+          >
             <button
               onClick={() => {
                 if (autosaveTimerRef.current) {
