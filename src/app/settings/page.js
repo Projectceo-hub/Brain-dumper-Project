@@ -483,16 +483,36 @@ export default function SettingsPage() {
                 <div>
                   <h3 className="font-serif text-lg font-bold" style={{ color: "var(--text-primary)" }}>
                     API Tokens
-                  </h3>
+                 </h3>
                   <p className="font-sans text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
                     Connect MindCanvas to Claude Desktop and other MCP clients
-                  </p>
-                </div>
+                 </p>
+               </div>
                 <span className="font-sans text-sm" style={{ color: "var(--text-muted)" }}>
                   →
-                </span>
-              </div>
-            </Link>
+               </span>
+             </div>
+           </Link>
+
+            <Link
+              href="/settings/import"
+              className="block p-5 transition-all active:scale-[0.99]"
+              style={cardStyle}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-serif text-lg font-bold" style={{ color: "var(--text-primary)" }}>
+                    Import from Notion
+                 </h3>
+                  <p className="font-sans text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
+                    Upload a Notion export, review the AI&apos;s proposed folder layout, then approve before anything is added
+                 </p>
+               </div>
+                <span className="font-sans text-sm" style={{ color: "var(--text-muted)" }}>
+                  →
+               </span>
+             </div>
+           </Link>
 
             <div
               className="block p-5 opacity-60"
