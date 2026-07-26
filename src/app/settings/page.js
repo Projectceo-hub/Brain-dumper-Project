@@ -503,16 +503,36 @@ export default function SettingsPage() {
                 <div>
                   <h3 className="font-serif text-lg font-bold" style={{ color: "var(--text-primary)" }}>
                     Import from Notion
-                 </h3>
+                  </h3>
                   <p className="font-sans text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
                     Upload a Notion export, review the AI&apos;s proposed folder layout, then approve before anything is added
-                 </p>
-               </div>
+                  </p>
+                </div>
                 <span className="font-sans text-sm" style={{ color: "var(--text-muted)" }}>
                   →
-               </span>
-             </div>
-           </Link>
+                </span>
+              </div>
+            </Link>
+
+            <Link
+              href="/settings/import-obsidian"
+              className="block p-5 transition-all active:scale-[0.99]"
+              style={cardStyle}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-serif text-lg font-bold" style={{ color: "var(--text-primary)" }}>
+                    Import from Obsidian
+                  </h3>
+                  <p className="font-sans text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
+                    Upload a zipped Obsidian vault. We skip the <code className="font-mono text-xs px-1 rounded" style={{ background: "var(--border)", color: "var(--text-primary)" }}>.obsidian/</code> config folder and keep <code className="font-mono text-xs px-1 rounded" style={{ background: "var(--border)", color: "var(--text-primary)" }}>[[wikilinks]]</code> as literal text.
+                  </p>
+                </div>
+                <span className="font-sans text-sm" style={{ color: "var(--text-muted)" }}>
+                  →
+                </span>
+              </div>
+            </Link>
 
             <div
               className="block p-5 opacity-60"

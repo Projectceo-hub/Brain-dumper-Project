@@ -1,9 +1,10 @@
 // POST /api/import-organize
 //
-// Takes a parsed Notion page list + the user's existing MindCanvas folders
-// and asks the NVIDIA NIM backend (same model + endpoint as /api/organize)
-// to propose a target folder for each imported page — either an existing
-// MindCanvas folder (matched by name) or a brand-new folder name.
+// Takes a parsed page list (from a Notion export OR an Obsidian vault) + the
+// user's existing MindCanvas folders, and asks the NVIDIA NIM backend (same
+// model + endpoint as /api/organize) to propose a target folder for each
+// imported page — either an existing MindCanvas folder (matched by name) or
+// a brand-new folder name.
 //
 // This route is PROPOSE-ONLY. It never writes anything. The frontend renders
 // the proposal for explicit user approval; note/folder creation happens in
@@ -12,7 +13,8 @@
 // Request body:
 //   {
 //     pages: [{ title, content, path }],
-//     existingFolders: [{ id, name }]
+//     existingFolders: [{ id, name }],
+//     source?: "notion" | "obsidian"   // optional, defaults to "notion"
 //   }
 //
 // Response:
@@ -25,13 +27,20 @@
 // back to its folder id — defensive code on both sides guards against the
 // AI inventing a name that doesn't match any real folder.
 //
+// The `source` field only changes the system-prompt wording (so the AI
+// understands whether nesting came from Notion or Obsidian). The response
+// shape, caps, defensive normalization, and fallback behaviour are
+// IDENTICAL for both sources — the Obsidian import reuses this same route
+// rather than getting its own, per the Phase 6 Part B "reuse not duplicate"
+// instruction.
+//
 // Defensive normalization mirrors /api/organize/route.js: strip code fences,
 // JSON.parse with try/catch, fall back to a sensible default proposal if the
 // AI output is unparseable (one bucket per page so nothing is dropped).
 
 import { NextResponse } from "next/server";
 
-const SYSTEM_PROMPT = `You organize a Notion export into a MindCanvas knowledge graph.
+const NOTION_PROMPT = `You organize a Notion export into a MindCanvas knowledge graph.
 
 You receive a list of imported pages (with their original Notion folder path) and the user's existing MindCanvas folders. Propose which folder each page should land in.
 
@@ -53,6 +62,44 @@ Rules:
 - If a page's content clearly fits one of the existing MindCanvas folders, reuse that folder's exact name and set "isNew": false. Match the existing folder name verbatim — do not paraphrase it.
 - If no existing folder fits, propose a concise new folder name (Title Case, max 40 chars) and set "isNew": true.
 - Preserve Notion's nesting where meaningful: pages that shared a parent folder in Notion should usually land in the same MindCanvas folder. Do not scatter siblings across unrelated folders just because their titles differ.
+- Every page appears in exactly one proposedFolder's pages array — no page is dropped, no page duplicated.
+- Do not invent pages that weren't in the input list.
+- Return ONLY the JSON object.`;
+
+// The Obsidian variant. The only differences from the Notion prompt are:
+//   - Wording reflects that pages came from an Obsidian vault (not Notion).
+//   - The nesting guidance emphasizes that Obsidian folders usually reflect
+//     the user's actual organizational intent, so the AI should prefer to
+//     MIRROR that structure into MindCanvas folders rather than reorganize
+//     aggressively. (Notion's export folders are often arbitrary; Obsidian's
+//     are not.)
+//   - We explicitly tell the AI to ignore [[wikilink]] syntax in the content
+//     excerpt — those are literal text and must not influence folder
+//     choices. They are handled separately in Phase 6 Part C.
+// The response shape and all defensive handling are IDENTICAL to Notion.
+const OBSIDIAN_PROMPT = `You organize an Obsidian vault export into a MindCanvas knowledge graph.
+
+You receive a list of imported pages (with their original Obsidian folder path) and the user's existing MindCanvas folders. Propose which folder each page should land in.
+
+Return ONLY valid JSON with this exact shape — no markdown, no code fences:
+{
+  "proposedFolders": [
+    {
+      "name": "Folder name (existing MindCanvas folder name OR a new sensible one)",
+      "isNew": true,
+      "pages": [
+        { "title": "Page title", "path": "Original Obsidian path" }
+      ]
+    }
+  ]
+}
+
+Rules:
+- For each page, choose exactly one target folder.
+- If a page's content clearly fits one of the existing MindCanvas folders, reuse that folder's exact name and set "isNew": false. Match the existing folder name verbatim — do not paraphrase it.
+- If no existing folder fits, propose a concise new folder name (Title Case, max 40 chars) and set "isNew": true.
+- Obsidian folder structure usually reflects the user's actual organizational intent. Prefer to MIRROR the source folders into MindCanvas folders (reuse existing names where they match) rather than aggressively reorganize. Siblings that shared a folder in the vault should usually land in the same MindCanvas folder.
+- The page content may contain Obsidian [[wikilink]] syntax. Treat any [[...]] as literal text only — do NOT use wikilinks to infer folders, and never include the bracket text in folder names. Wikilinks are resolved separately in a later phase.
 - Every page appears in exactly one proposedFolder's pages array — no page is dropped, no page duplicated.
 - Do not invent pages that weren't in the input list.
 - Return ONLY the JSON object.`;
@@ -94,6 +141,20 @@ function buildUserMessage(pages, existingFolders) {
   return `${existingSection}\n\nImported pages:\n\n${pagesSection}`;
 }
 
+// Pick the system prompt based on the declared source of the imported
+// pages. Unknown / missing source defaults to the Notion prompt (the
+// original behaviour) so existing callers keep working unchanged.
+function systemPromptFor(source) {
+  if (source === "obsidian") return OBSIDIAN_PROMPT;
+  return NOTION_PROMPT;
+}
+
+// The fallback bucket label shown to the user when the AI output is
+// unparseable. Source-specific so the user sees an honest label.
+function fallbackBucketLabel(source) {
+  return source === "obsidian" ? "Imported from Obsidian" : "Imported from Notion";
+}
+
 // Defensive normalization — coerce whatever the AI returned into the
 // declared shape, dropping malformed entries rather than crashing.
 function normalizeProposal(raw) {
@@ -131,6 +192,7 @@ export async function POST(request) {
     const body = await request.json().catch(() => ({}));
     const pages = Array.isArray(body?.pages) ? body.pages : [];
     const existingFolders = Array.isArray(body?.existingFolders) ? body.existingFolders : [];
+    const source = body?.source === "obsidian" ? "obsidian" : "notion";
 
     if (pages.length === 0) {
       return NextResponse.json({ error: "No pages to organize." }, { status: 400 });
@@ -144,6 +206,7 @@ export async function POST(request) {
       );
     }
 
+    const systemPrompt = systemPromptFor(source);
     const userMessage = buildUserMessage(pages, existingFolders);
 
     const response = await fetch(ENDPOINT, {
@@ -155,7 +218,7 @@ export async function POST(request) {
       body: JSON.stringify({
         model: MODEL,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: systemPrompt },
           { role: "user", content: userMessage },
         ],
         temperature: 0.3,
@@ -184,18 +247,20 @@ export async function POST(request) {
       raw = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
     }
 
+    const fallbackLabel = fallbackBucketLabel(source);
+
     let parsed;
     try {
       parsed = JSON.parse(raw);
     } catch (parseError) {
       console.error("Failed to parse AI import proposal JSON:", parseError);
-      // Fallback: bucket every page into a single "Imported from Notion"
-      // folder so the user still gets a reviewable proposal (and can move
-      // pages around before approving). Nothing is lost.
+      // Fallback: bucket every page into a single catch-all folder so the
+      // user still gets a reviewable proposal (and can move pages around
+      // before approving). Nothing is lost.
       parsed = {
         proposedFolders: [
           {
-            name: "Imported from Notion",
+            name: fallbackLabel,
             isNew: true,
             pages: pages.slice(0, MAX_PAGES).map((p) => ({
               title: p.title,
@@ -208,13 +273,12 @@ export async function POST(request) {
 
     const normalized = normalizeProposal(parsed);
 
-    // Final safety net: if normalization dropped everything (AI returned
-    // garbage and our fallback above somehow didn't apply), put all pages
+    // Final safety net: if normalization dropped everything, put all pages
     // into one fallback bucket so the preview UI still has something to show.
     if (normalized.proposedFolders.length === 0) {
       normalized.proposedFolders = [
         {
-          name: "Imported from Notion",
+          name: fallbackLabel,
           isNew: true,
           pages: pages.slice(0, MAX_PAGES).map((p) => ({
             title: p.title,

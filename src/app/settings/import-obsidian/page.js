@@ -4,46 +4,37 @@ import { useRef } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { getAllFolders, createFolder, createNote } from "@/lib/db";
-import { parseNotionZip } from "@/lib/notionImport";
+import { parseObsidianZip } from "@/lib/obsidianImport";
 import {
   useImportFlow,
   PhaseSteps,
   SamplePageList,
   ProposalPreview,
+  uniqueFolderCount,
 } from "@/components/importFlow";
 
-// Notion import flow (Phase 6 Part A).
+// Obsidian import flow (Phase 6 Part B).
 //
-// This page reuses the shared propose-then-approve state machine from
-// src/components/importFlow.js. The Obsidian import (Phase 6 Part B) uses
-// the same shared module — the only differences between the two pages are:
-//   - The parser (parseNotionZip vs parseObsidianZip).
-//   - The `source` flag sent to /api/import-organize ("notion" | "obsidian").
-//   - The skipped-file summary card (Notion surfaces htmlSkipped +
-//     zipsRecursed + debug probe; Obsidian surfaces config-skipped +
-//     non-Markdown-skipped).
+// This page reuses the same propose-then-approve state machine and the
+// same AI-organize backend route (/api/import-organize, with
+// source:"obsidian") as the Notion import page. The only thing that
+// differs from Part A is:
+//   - The parser (parseObsidianZip from src/lib/obsidianImport.js),
+//     which skips the .obsidian/ and .trash/ config folders and preserves
+//     [[wikilinks]] verbatim as literal text.
+//   - The page copy / skipped-file summary fields (Obsidian doesn't have
+//     HTML files or nested zips, but it does have a config-skipped count).
 //
-// import-page phase state machine is owned by useImportFlow:
-//   "idle"     – page loaded, no file picked
-//   "parsing"  – JSZip extraction is running
-//   "summary"  – file parsed, user must confirm "look at proposed folder layout"
-//   "ai"       – calling /api/import-organize
-//   "preview"  – AI proposal ready, user can edit and approve or cancel
-//   "applying" – approval in progress (creating folders + notes)
-//   "done"     – import complete; provide a "View in MindCanvas" CTA
-//   "cancelled" – user cancelled; nothing was written, show retry CTA
-//   "error"    – something went wrong, shown inline with retry option
-//
-// Propose-then-approve is hard-coded into the state machine: nothing in
-// phases "parsing"/"summary"/"ai" ever calls createFolder/createNote. Real
-// writes only happen in "applying", and only after the user explicitly
-// clicked "Approve and import".
+// `[[wikilink]]` syntax is preserved character-for-character in the
+// imported note body — it is NOT parsed or converted here. That resolution
+// work is Phase 6 Part C and depends on this phase storing the raw text
+// intact.
 
-export default function ImportPage() {
+export default function ImportObsidianPage() {
   const router = useRouter();
   const fileInputRef = useRef(null);
 
-  const flow = useImportFlow({ parse: parseNotionZip, source: "notion" });
+  const flow = useImportFlow({ parse: parseObsidianZip, source: "obsidian" });
   const {
     phase,
     errorMsg,
@@ -62,15 +53,6 @@ export default function ImportPage() {
     handleApply,
   } = flow;
 
-  // Notion-specific counters exploded out of the shared extraCounts bag.
-  // We name them here so the summary card below can render the same fields
-  // Part A always has (HTML skipped, nested zips recursed, debug probe).
-  const htmlSkipped = extraCounts.htmlSkipped || 0;
-  const otherSkipped = extraCounts.otherSkipped || 0;
-  const emptySkipped = extraCounts.emptySkipped || 0;
-  const zipsRecursed = extraCounts.zipsRecursed || 0;
-  const debug = extraCounts.debug || [];
-
   const handlePickFile = () => {
     if (fileInputRef.current) fileInputRef.current.click();
   };
@@ -84,6 +66,10 @@ export default function ImportPage() {
 
   const pageBg = { background: "var(--bg)" };
   const card = { background: "var(--surface)", borderRadius: "16px" };
+
+  const nonMdSkipped = extraCounts.nonMdSkipped || 0;
+  const emptySkipped = extraCounts.emptySkipped || 0;
+  const configSkipped = extraCounts.configSkipped || 0;
 
   return (
     <div className="flex min-h-screen" style={pageBg}>
@@ -113,21 +99,41 @@ export default function ImportPage() {
             className="font-serif text-3xl font-bold mt-1"
             style={{ color: "var(--text-primary)" }}
           >
-            Import from Notion
+            Import from Obsidian
           </h1>
           <p
             className="font-sans text-sm mt-1 max-w-2xl leading-relaxed"
             style={{ color: "var(--text-secondary)" }}
           >
-            In Notion, choose <span className="font-semibold">Settings &rarr; Export</span>{" "}
-            with <span className="font-semibold">Markdown</span> format, then upload the{" "}
+            Zip your Obsidian vault folder and upload the{" "}
             <code
               className="font-mono text-xs px-1.5 py-0.5 rounded"
               style={{ background: "var(--border)", color: "var(--text-primary)" }}
             >
               .zip
             </code>{" "}
-            here. We&apos;ll show you a preview before anything is added to your account.
+            here. We&apos;ll skip Obsidian&apos;s internal{" "}
+            <code
+              className="font-mono text-xs px-1.5 py-0.5 rounded"
+              style={{ background: "var(--border)", color: "var(--text-primary)" }}
+            >
+              .obsidian/
+            </code>{" "}
+            and{" "}
+            <code
+              className="font-mono text-xs px-1.5 py-0.5 rounded"
+              style={{ background: "var(--border)", color: "var(--text-primary)" }}
+            >
+              .trash/
+            </code>{" "}
+            folders, keep your{" "}
+            <code
+              className="font-mono text-xs px-1.5 py-0.5 rounded"
+              style={{ background: "var(--border)", color: "var(--text-primary)" }}
+            >
+              [[wikilinks]]
+            </code>{" "}
+            as literal text, and show you a preview before anything is added to your account.
           </p>
         </header>
 
@@ -154,8 +160,23 @@ export default function ImportPage() {
                 className="font-sans text-sm leading-relaxed"
                 style={{ color: "var(--text-secondary)" }}
               >
-                Pick the Notion export zip from your device. Nothing is uploaded anywhere
-                &mdash; we read it directly in your browser.
+                Pick the zip of your Obsidian vault. Nothing is uploaded anywhere &mdash;
+                we read it directly in your browser.
+              </p>
+              <p
+                className="font-sans text-xs mt-3"
+                style={{ color: "var(--text-muted)" }}
+              >
+                To make the zip: in your file manager, right-click your vault folder and
+                choose &ldquo;Compress&rdquo; / &ldquo;Send to &rarr; Compressed folder&rdquo;.
+                The top-level{" "}
+                <code
+                  className="font-mono text-xs px-1 rounded"
+                  style={{ background: "var(--border)", color: "var(--text-primary)" }}
+                >
+                  .obsidian/
+                </code>{" "}
+                folder is detected and skipped automatically.
               </p>
               <input
                 ref={fileInputRef}
@@ -170,7 +191,7 @@ export default function ImportPage() {
                 className="mt-5 rounded-full px-5 py-2.5 font-sans text-sm font-semibold shadow-md transition-all active:scale-[0.98]"
                 style={{ background: "var(--accent)", color: "#fff" }}
               >
-                Choose Notion export&hellip;
+                Choose Obsidian vault zip&hellip;
               </button>
             </div>
           )}
@@ -181,7 +202,7 @@ export default function ImportPage() {
                 className="font-sans text-sm animate-pulse"
                 style={{ color: "var(--text-secondary)" }}
               >
-                Reading your zip&hellip;
+                Reading your vault&hellip;
               </p>
             </div>
           )}
@@ -193,96 +214,67 @@ export default function ImportPage() {
                 style={{ color: "var(--text-primary)" }}
               >
                 Found {parsedPages.length}{" "}
-                {parsedPages.length === 1 ? "page" : "pages"} across{" "}
+                {parsedPages.length === 1 ? "note" : "notes"} across{" "}
                 {uniqueFolderCount(parsedPages)}{" "}
                 {uniqueFolderCount(parsedPages) === 1 ? "folder" : "folders"}
               </h2>
-              {zipsRecursed > 0 && (
-                <p
-                  className="font-sans text-xs mt-2"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Recursed into {zipsRecursed} nested{" "}
-                  {zipsRecursed === 1 ? "zip" : "zips"} to find the pages above.
-                </p>
-              )}
 
-              {(htmlSkipped > 0 || otherSkipped > 0 || emptySkipped > 0) && (
+              {(configSkipped > 0 || nonMdSkipped > 0 || emptySkipped > 0) && (
                 <p
                   className="font-sans text-xs mt-1"
                   style={{ color: "var(--text-muted)" }}
                 >
                   Skipped:
-                  {htmlSkipped > 0
-                    ? " " + htmlSkipped + " HTML " + (htmlSkipped === 1 ? "file" : "files")
+                  {configSkipped > 0
+                    ? " " +
+                      configSkipped +
+                      " config " +
+                      (configSkipped === 1 ? "file" : "files") +
+                      " (.obsidian / .trash / dotfiles)"
                     : ""}
-                  {otherSkipped > 0
-                    ? (htmlSkipped > 0 ? "," : "") +
+                  {nonMdSkipped > 0
+                    ? (configSkipped > 0 ? "," : "") +
                       " " +
-                      otherSkipped +
-                      " other " +
-                      (otherSkipped === 1 ? "file" : "files")
+                      nonMdSkipped +
+                      " non-Markdown " +
+                      (nonMdSkipped === 1 ? "file" : "files") +
+                      " (images, PDFs, etc.)"
                     : ""}
                   {emptySkipped > 0
-                    ? (htmlSkipped + otherSkipped > 0 ? "," : "") +
+                    ? (configSkipped + nonMdSkipped > 0 ? "," : "") +
                       " " +
                       emptySkipped +
                       " empty " +
-                      (emptySkipped === 1 ? "page" : "pages")
+                      (emptySkipped === 1 ? "note" : "notes")
                     : ""}
-                  .{htmlSkipped > 0 ? " Re-export as Markdown to include HTML pages." : ""}
+                  .
                 </p>
               )}
+
               <p
                 className="font-sans text-sm mt-3 leading-relaxed"
                 style={{ color: "var(--text-secondary)" }}
               >
-                We&apos;ll send a summary of these pages to the AI to propose a folder layout.
-                You&apos;ll see the proposal before anything is added to your MindCanvas.
+                We&apos;ll send a summary of these notes to the AI to propose a folder layout.
+                You&apos;ll see the proposal before anything is added to your MindCanvas. Any{" "}
+                <code
+                  className="font-mono text-xs px-1 rounded"
+                  style={{ background: "var(--border)", color: "var(--text-primary)" }}
+                >
+                  [[wikilinks]]
+                </code>{" "}
+                in note bodies are preserved exactly as literal text &mdash; they are not
+                converted to connections in this step.
               </p>
 
               <SamplePageList pages={parsedPages} />
 
-              {(debug && debug.length > 0) && (
-                <div
-                  className="mt-3 p-3 rounded-lg font-sans text-xs"
-                  style={{
-                    background: "color-mix(in srgb, var(--bg) 80%, var(--surface))",
-                    border: "1px solid var(--border)",
-                  }}
-                >
-                  <p style={{ color: "var(--text-muted)" }} className="font-semibold uppercase tracking-wider mb-1">
-                    Content diagnostics (first {Math.min(debug.length, 3)} files)
-                  </p>
-                  <ul style={{ color: "var(--text-secondary)" }}>
-                    {debug.map((d, i) => (
-                      <li key={i}>
-                        &ldquo;{d.title}&rdquo;: {d.rawBytesLen} raw bytes &rarr; {d.decodedTextLen} chars decoded
-                        {d.rawBytesLen > 0 && d.decodedTextLen === 0 && (
-                          <span style={{ color: "#DC2626" }}>
-                            {" "}&mdash; DECODER FAILED (bytes present, text empty)
-                          </span>
-                        )}
-                        {d.rawBytesLen === 0 && (
-                          <span style={{ color: "#DC2626" }}>
-                            {" "}&mdash; JSZip returned zero bytes for this entry
-                          </span>
-                        )}
-                        {d.bodyPreview && (
-                          <span style={{ color: "var(--text-muted)" }}>
-                            ; preview &ldquo;{d.bodyPreview}&rdquo;
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
               <div className="flex flex-wrap gap-3 mt-5">
                 <button
                   type="button"
-                  onClick={() => handleContinueToAI({ getAllFolders })}
+                  onClick={() =>
+                    handleContinueToAI({ getAllFolders })
+                  }
                   className="rounded-full px-5 py-2.5 font-sans text-sm font-semibold shadow-md transition-all active:scale-[0.98]"
                   style={{ background: "var(--accent)", color: "#fff" }}
                 >
@@ -316,7 +308,7 @@ export default function ImportPage() {
                 className="font-sans text-xs mt-2"
                 style={{ color: "var(--text-muted)" }}
               >
-                This may take a few seconds for larger exports.
+                This may take a few seconds for larger vaults.
               </p>
             </div>
           )}
@@ -342,7 +334,7 @@ export default function ImportPage() {
                   className="font-sans text-xs mt-2"
                   style={{ color: "var(--text-muted)" }}
                 >
-                  You can move any page to a different folder before approving. Nothing is
+                  You can move any note to a different folder before approving. Nothing is
                   written until you click Approve import.
                 </p>
               </div>
@@ -421,7 +413,14 @@ export default function ImportPage() {
                 <span className="font-semibold">
                   {applyProgress.notesCreated} notes
                 </span>{" "}
-                to your MindCanvas.
+                to your MindCanvas. Any{" "}
+                <code
+                  className="font-mono text-xs px-1 rounded"
+                  style={{ background: "var(--border)", color: "var(--text-primary)" }}
+                >
+                  [[wikilinks]]
+                </code>{" "}
+                were preserved as literal text inside each note.
               </p>
               <div className="flex flex-wrap gap-3 mt-5">
                 <button
@@ -442,7 +441,7 @@ export default function ImportPage() {
                     background: "transparent",
                   }}
                 >
-                  Import another export
+                  Import another vault
                 </button>
               </div>
             </div>
@@ -460,8 +459,8 @@ export default function ImportPage() {
                 className="font-sans text-sm mt-2 leading-relaxed"
                 style={{ color: "var(--text-secondary)" }}
               >
-                Nothing was added to your MindCanvas. You can import a different Notion
-                export whenever you want.
+                Nothing was added to your MindCanvas. You can import a different Obsidian
+                vault whenever you want.
               </p>
               <div className="flex flex-wrap gap-3 mt-5">
                 <button
@@ -524,16 +523,4 @@ export default function ImportPage() {
       </div>
     </div>
   );
-}
-
-// Local copy kept for the summary card above. The shared one in
-// importFlow.js is identical — we keep it here so this file has no
-// behavioural dependency on importFlow's internal helper exports beyond
-// the React components + the hook.
-function uniqueFolderCount(pages) {
-  const set = new Set();
-  for (const p of pages) {
-    if (p && p.path) set.add(p.path);
-  }
-  return set.size;
 }
