@@ -223,6 +223,13 @@ export function useImportFlow({ parse, source }) {
 
   // Approval step: creates the (new) folders, then notes. Real writes only
   // happen here — never earlier in the flow.
+  //
+  // Returns (via the async promise) an array of descriptors for every note
+  // that was actually created on this import run:
+  //   { noteId, folderId, title, content }
+  // The caller (specifically the Obsidian import page) uses this to run the
+  // post-approval [[wikilink]] → @mention conversion pass — Notion is out
+  // of scope for that step and just ignores the returned list.
   const handleApply = async ({ createFolder, createNote }) => {
     setErrorMsg("");
     setPhase("applying");
@@ -233,6 +240,7 @@ export function useImportFlow({ parse, source }) {
 
     let createdFolders = 0;
     let createdNotes = 0;
+    const createdDescriptors = [];
     try {
       const resolved = {};
       for (const pf of proposal) {
@@ -248,13 +256,23 @@ export function useImportFlow({ parse, source }) {
       for (const pf of proposal) {
         const folderId = resolved[pf.folderKey];
         for (const page of pf.pages) {
-          await createNote(folderId, page.title, page.content);
+          const noteId = await createNote(folderId, page.title, page.content);
           createdNotes += 1;
           setApplyProgress((p) => ({ ...p, notesCreated: createdNotes }));
+          // Preserve enough for the [[wikilink]] post-step to do its
+          // case-insensitive title lookup against other just-imported
+          // notes in the same run, without re-fetching anything.
+          createdDescriptors.push({
+            noteId,
+            folderId,
+            title: page.title,
+            content: page.content,
+          });
         }
       }
 
       setPhase("done");
+      return createdDescriptors;
     } catch (err) {
       setErrorMsg(
         "Import stopped partway: " +
@@ -266,6 +284,7 @@ export function useImportFlow({ parse, source }) {
           " note(s) were already created.",
       );
       setPhase("error");
+      return createdDescriptors;
     }
   };
 

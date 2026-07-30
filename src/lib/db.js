@@ -34,6 +34,20 @@ db.version(3).stores({
   entities: "id, userId, name, type, sourceNoteId, createdAt",
 });
 
+// Phase 6 Part C: note_links stores user-authored mention connections
+// between two notes. Mirrors the remote public.note_links Supabase table
+// (id TEXT, source_note_id TEXT, target_note_id TEXT, created_at).
+db.version(4).stores({
+  folders: "id, userId, name, createdAt, updatedAt, syncStatus",
+  notes:
+    "id, userId, folderId, parentNoteId, title, body, createdAt, updatedAt, syncStatus",
+  syncQueue:
+    "++id, userId, table, recordId, action, createdAt, updatedAt, attempts",
+  meta: "key",
+  entities: "id, userId, name, type, sourceNoteId, createdAt",
+  note_links: "id, source_note_id, target_note_id, created_at",
+});
+
 export default db;
 
 let activeUserId = null;
@@ -145,7 +159,12 @@ async function queueSync({ table, recordId, action, payload }) {
 }
 
 async function markSynced(table, recordId) {
-  const collection = table === "folders" ? db.folders : db.notes;
+  const collection =
+    table === "folders"
+      ? db.folders
+      : table === "note_links"
+        ? db.note_links
+        : db.notes;
   await collection.update(String(recordId), {
     syncStatus: "synced",
     lastSyncError: "",
@@ -153,7 +172,12 @@ async function markSynced(table, recordId) {
 }
 
 async function markSyncFailed(table, recordId, error) {
-  const collection = table === "folders" ? db.folders : db.notes;
+  const collection =
+    table === "folders"
+      ? db.folders
+      : table === "note_links"
+        ? db.note_links
+        : db.notes;
   await collection.update(String(recordId), {
     syncStatus: "pending",
     lastSyncError: error?.message || "Sync failed",
@@ -178,6 +202,22 @@ async function pushChange(change) {
 
     const { error } = await supabase
       .from("folders")
+      .upsert(change.payload, { onConflict: "id" });
+    if (error) throw error;
+    return;
+  }
+
+  if (change.table === "note_links") {
+    if (change.action === "delete") {
+      const { error } = await supabase
+        .from("note_links")
+        .delete()
+        .eq("id", change.recordId);
+      if (error) throw error;
+      return;
+    }
+    const { error } = await supabase
+      .from("note_links")
       .upsert(change.payload, { onConflict: "id" });
     if (error) throw error;
     return;
@@ -340,15 +380,24 @@ export async function initializeSyncForUser(userId) {
   const supabase = createClient();
   if (!supabase) return;
 
-  const [foldersResult, notesResult] = await Promise.all([
+  const [foldersResult, notesResult, linksResult] = await Promise.all([
     supabase.from("folders").select("*").order("updated_at", { ascending: false }),
     supabase.from("notes").select("*").order("updated_at", { ascending: false }),
+    supabase.from("note_links").select("*").order("created_at", { ascending: false }),
   ]);
 
   if (foldersResult.error) throw foldersResult.error;
   if (notesResult.error) throw notesResult.error;
+  // note_links may not exist yet for users who haven't run the Part C
+  // migration — treat that specific error as "no remote links yet" rather
+  // than failing the whole sync. Any other error still throws.
+  if (linksResult.error) {
+    const msg = (linksResult.error && linksResult.error.message) || "";
+    if (!/relation .*note_links/i.test(msg)) throw linksResult.error;
+  }
 
   await mergeRemoteRows(userId, foldersResult.data || [], notesResult.data || []);
+  await mergeRemoteNoteLinks(userId, linksResult.data || []);
   await retryPendingSync();
 
   if (typeof window !== "undefined") {
@@ -571,6 +620,28 @@ export async function updateNote(noteId, changes) {
     syncStatus: "pending",
   };
 
+  // Diagnostic: detect the "body wiped but title survives" signature and
+  // log a stack trace so we can find the caller. Without a stack trace
+  // logging here, we won't know who triggered the empty write.
+  const prevBodyLen = (note.body || "").length;
+  const nextBodyLen = (updated.body || "").length;
+  const bodyWiped = prevBodyLen > 0 && nextBodyLen === 0;
+  if (bodyWiped) {
+    console.warn(
+      "[MC-DBG] updateNote WIPE-DETECTED",
+      {
+        noteId,
+        prevBodyLen,
+        nextBodyLen,
+        prevTitle: note.title,
+        nextTitle: updated.title,
+        bodyInChanges: changes && "body" in changes,
+        titleInChanges: changes && "title" in changes,
+      },
+      new Error("wipe-stack"),
+    );
+  }
+
   await db.notes.put(updated);
   await touchFolder(updated.folderId, now);
 
@@ -599,6 +670,140 @@ export async function deleteNote(noteId) {
     action: "delete",
     payload: { id: String(noteId), user_id: note.userId },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Note links (Phase 6 Part C — @mention connections between two notes)
+// ---------------------------------------------------------------------------
+// `note_links` mirrors the remote public.note_links table. RLS on the
+// remote side guarantees a user can only link their own notes — we replicate
+// that check locally by resolving both endpoints through getNoteById before
+// writing, so a stale local cache can never produce a link between notes the
+// user doesn't own. The unique (source_note_id, target_note_id) constraint
+// is enforced both locally (we delete-then-add) and remotely (the unique
+// index on the Supabase table).
+
+function toRemoteNoteLink(link) {
+  return {
+    id: String(link.id),
+    source_note_id: String(link.source_note_id),
+    target_note_id: String(link.target_note_id),
+    created_at: toDate(link.created_at).toISOString(),
+  };
+}
+
+function fromRemoteNoteLink(link) {
+  return {
+    id: link.id,
+    source_note_id: link.source_note_id,
+    target_note_id: link.target_note_id,
+    created_at: toDate(link.created_at),
+    syncStatus: "synced",
+    lastSyncError: "",
+  };
+}
+
+// Creates a directed note_link: "sourceNoteId mentions targetNoteId".
+// Idempotent — if the same (source, target) pair already exists locally or
+// remotely, no duplicate row is created. Returns the link id (existing or
+// new), or null if either note can't be resolved (no silent fake writes).
+export async function createNoteLink(sourceNoteId, targetNoteId) {
+  if (!sourceNoteId || !targetNoteId) return null;
+  if (String(sourceNoteId) === String(targetNoteId)) return null;
+
+  const [source, target] = await Promise.all([
+    getNoteById(sourceNoteId),
+    getNoteById(targetNoteId),
+  ]);
+  if (!source || !target) return null;
+
+  const srcId = String(sourceNoteId);
+  const tgtId = String(targetNoteId);
+
+  // Idempotent: if a local row already exists for this pair, reuse it.
+  const existing = await db.note_links
+    .where("source_note_id")
+    .equals(srcId)
+    .and((row) => String(row.target_note_id) === tgtId)
+    .first();
+  if (existing) return existing.id;
+
+  const link = {
+    id: makeId(),
+    source_note_id: srcId,
+    target_note_id: tgtId,
+    created_at: new Date(),
+    syncStatus: "pending",
+    lastSyncError: "",
+  };
+
+  await db.note_links.add(link);
+  await syncOrQueue({
+    table: "note_links",
+    recordId: link.id,
+    action: "upsert",
+    payload: toRemoteNoteLink(link),
+  });
+
+  return link.id;
+}
+
+// Returns every note_link row where noteId is either the source or the
+// target. Used by the editor to render mention spans whose target still
+// exists, and to gray-out mentions whose target has been deleted.
+export async function getNoteLinks(noteId) {
+  if (!noteId) return [];
+  const id = String(noteId);
+
+  const [asSource, asTarget] = await Promise.all([
+    db.note_links.where("source_note_id").equals(id).toArray(),
+    db.note_links.where("target_note_id").equals(id).toArray(),
+  ]);
+
+  // Dedup by id in case the same row shows up in both indexes (shouldn't,
+  // since source != target, but defensive).
+  const seen = new Set();
+  const out = [];
+  for (const row of [...asSource, ...asTarget]) {
+    if (!seen.has(row.id)) {
+      seen.add(row.id);
+      out.push(row);
+    }
+  }
+  return out;
+}
+
+// Removes a specific (source -> target) link from both Dexie and Supabase.
+export async function deleteNoteLink(sourceNoteId, targetNoteId) {
+  if (!sourceNoteId || !targetNoteId) return;
+  const srcId = String(sourceNoteId);
+  const tgtId = String(targetNoteId);
+
+  const existing = await db.note_links
+    .where("source_note_id")
+    .equals(srcId)
+    .and((row) => String(row.target_note_id) === tgtId)
+    .toArray();
+
+  for (const row of existing) {
+    await db.note_links.delete(row.id);
+    await syncOrQueue({
+      table: "note_links",
+      recordId: row.id,
+      action: "delete",
+      payload: { id: row.id },
+    });
+  }
+}
+
+// Used by initializeSyncForUser to pull remote note_links into the local
+// cache after a login, mirroring what mergeRemoteRows does for folders and
+// notes. Kept local to this module (not exported) because the public API is
+// the three functions above.
+async function mergeRemoteNoteLinks(userId, remoteLinks) {
+  for (const link of remoteLinks) {
+    await db.note_links.put(fromRemoteNoteLink(link));
+  }
 }
 
 export async function getNoteById(noteId) {

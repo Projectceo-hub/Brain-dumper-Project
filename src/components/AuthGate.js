@@ -157,6 +157,12 @@ export default function AuthGate({ children }) {
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState("");
   const lastSyncedUserIdRef = useRef(null);
+  // The onAuthStateChange callback below is registered once (deps: []), so
+  // any `session` it reads from the render closure is frozen at the
+  // first-render value (null) forever. Reading the live value through a ref
+  // is the only way that callback can ask "did we have a session?" — see
+  // the STALE-CLOSURE note at the `userIdCleared` computation.
+  const sessionRef = useRef(null);
 
   useEffect(() => {
     if (!configured) {
@@ -170,6 +176,7 @@ export default function AuthGate({ children }) {
       const { data } = await supabase.auth.getSession();
       if (!mounted) return;
 
+      sessionRef.current = data.session ?? null;
       setSession(data.session ?? null);
 
       // Only run initial sync when we actually have a new user id. The
@@ -204,30 +211,98 @@ export default function AuthGate({ children }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
-      // Only update session state for genuine auth changes — NOT for
-      // visibility/focus-triggered re-validation that Supabase does
-      // internally. SIGNED_OUT is the only event that should clear state,
-      // TOKEN_REFRESHED and INITIAL_SESSION keep the existing user but nextSession
-      // may be a new session object (causing unnecessary re-renders).
+      // DATA-LOSS-RACE FIX (Phase 6 Part C follow-up).
+      //
+      // Background: Supabase's auth client subscribes to
+      // `window.visibilitychange` (see @supabase/auth-js GoTrueClient.js
+      // ~line 4636). Returning to a tab triggers a token refresh, which
+      // fires a SEQUENCE of onAuthStateChange events in quick order. The
+      // LEADING events can carry a `nextSession` whose `user.id` is null
+      // or undefined (initial storage resolution, mid-refresh state, etc.)
+      // BEFORE the fully-resolved session event arrives milliseconds later.
+      //
+      // The previous code unconditionally called `setSession(null)` on
+      // any event lacking a user id (lines 222-226 of the old version).
+      // That flip-flop caused AuthGate to render <AuthScreen/> briefly,
+      // FULLY UNMOUNTING the authenticated subtree (the open note editor!)
+      // and then re-mounting it a moment later. The orphaned autosave timer
+      // in the dying mount then fired across the boundary and wrote
+      // `{ title: "...", body: "" }` to updateNote — wiping the note's
+      // body while preserving its title. (Root cause confirmed by the
+      // [MC-DBG] trace + WIPE-DETECTED stack from the diagnostic build.)
+      //
+      // FIX: session is now monotonic within a tab's lifetime. The ONLY
+      // event that clears `session` is a genuine `SIGNED_OUT` (either
+      // explicit via supabase.auth.signOut(), or the auth client emitting
+      // SIGNED_OUT on storage sync from another tab). Every other event
+      // — INITIAL_SESSION, TOKEN_REFRESHED, MFA_CHANGED, USER_UPDATED,
+      // PASSWORD_RECOVERY, even an intermediate event with a null
+      // `nextSession.user` — is treated as a NO-OP for auth-gate purposes:
+      // the previously-known session stays put. Once you're in, you stay
+      // in until you actually sign out.
+      //
+      // Diagnostic logging (still in place): every event is logged on the
+      // console so the user can verify across 10+ tab cycles that no
+      // spurious session-clear happens.
+
+      console.log("[MC-DBG] auth.onAuthStateChange", {
+        event,
+        hasUser: Boolean(nextSession?.user?.id),
+        userId: nextSession?.user?.id || "(none)",
+        lastSyncedUserId: lastSyncedUserIdRef.current,
+      });
+
       if (event === "SIGNED_OUT") {
+        console.log("[MC-DBG] genuine SIGNED_OUT — clearing session");
+        sessionRef.current = null;
         setSession(null);
         lastSyncedUserIdRef.current = null;
         clearActiveSyncUser();
         return;
       }
 
-      // Only re-render + re-sync if the user id actually changed (e.g. sign-in
-      // as a different user, or first sign-in after sign-out). This is what
-      // prevents tab-refocus from re-syncing everything.
       const nextUserId = nextSession?.user?.id;
       if (!nextUserId) {
-        setSession(null);
+        // Intermediate / transient event during a token refresh — keep
+        // the existing session. Previously this branch unmounted the whole
+        // authenticated subtree. NO setSession(null) here.
+        console.log("[MC-DBG] auth event with no user id — ignored (kept existing session)");
         return;
       }
 
+      // STALE-CLOSURE FIX (second unmount path — the one the AuthGate fix
+      // above did NOT close).
+      //
+      // This was `!session && nextSession`. Because this callback is
+      // registered in a `[]`-deps effect, `session` is pinned to the
+      // first-render value (null) for the lifetime of the subscription, so
+      // `!session` was ALWAYS true and `userIdCleared` was ALWAYS true for
+      // any event carrying a user id. Result: every TOKEN_REFRESHED /
+      // INITIAL_SESSION / USER_UPDATED re-ran initializeSyncForUser, which
+      // calls setSyncing(true) — and the `if (loading || syncing)` branch
+      // below renders the "Syncing your MindCanvas..." screen INSTEAD of
+      // `children`, fully unmounting FolderPage and the open note editor.
+      //
+      // That is the same unmount the monotonic-session fix was meant to
+      // eliminate, reached by a different route: not a false sign-out, but
+      // a false "you just logged in, resync everything". On tab return with
+      // an aged access token it fires reliably.
+      //
+      // `sessionRef` carries the live value across the closure boundary.
+      // Note `userIdChanged` already covers a genuine fresh login (the id
+      // won't match lastSyncedUserIdRef), so this condition only needs to
+      // catch "we had nothing and now we do".
       const userIdChanged = nextUserId !== lastSyncedUserIdRef.current;
-      const userIdCleared = !session && nextSession;
+      const userIdCleared = !sessionRef.current && nextSession;
 
+      console.log("[MC-DBG] auth resync decision", {
+        userIdChanged,
+        userIdCleared,
+        hadSession: Boolean(sessionRef.current),
+        willResync: userIdChanged || userIdCleared,
+      });
+
+      sessionRef.current = nextSession;
       setSession(nextSession);
       setSyncError("");
 

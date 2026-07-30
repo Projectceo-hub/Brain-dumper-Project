@@ -17,9 +17,10 @@
 //     folders defensively (`.git/`, `.obsidian-git/`, etc.) since those
 //     are app-internal, not user notes.
 //   - `[[wikilink]]` syntax inside note bodies is preserved EXACTLY as
-//     literal text. We do NOT strip, parse, or convert it. Resolving
-//     wikilinks into real connections is Phase 6 Part C and depends on
-//     this phase keeping the raw `[[...]]` text intact.
+//     literal text during the parse step (parseObsidianZip below). The
+//     POST-approval wikilink resolution is provided by
+//     `convertWikilinksInImportedNotes` (also in this file) — see its
+//     header comment for the rules.
 //
 // Only .md files are imported. Other file types (images, PDFs, etc.) are
 // skipped but counted so the summary card can be honest about what was
@@ -216,4 +217,138 @@ export async function parseObsidianZip(file) {
     emptySkipped: acc.emptySkipped,
     configSkipped: acc.configSkipped,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6 Part C: [[wikilink]] → @mention conversion (post-approval only)
+// ---------------------------------------------------------------------------
+//
+// This runs AFTER the user has approved the AI-proposed layout and notes
+// have been written to Supabase + the local Dexie cache. It scans every
+// just-imported note body for `[[Target Name]]` patterns and converts
+// them to the same `@[noteId|title]` token format the real editor reads.
+// Rules:
+//
+//   1. Case-insensitive title match against other notes in the same import
+//      run (createdDescriptors). Title-equality against the notes table
+//      beyond this run is allowed but not required; one import's wikilinks
+//      only cross-link within the same import vault to avoid false
+//      positives against notes the user had before the import.
+//
+//   2. Matched → replace `[[Target]]` with `@[matchedNoteId|Target]` in
+//      the body (via updateNote), and call createNoteLink(thisNoteId,
+//      matchedNoteId) to record a real bidirectional connection.
+//
+//   3. No match (dangling wikilink) → replace `[[Target]]` with the
+//      display-only span format `@Target` — NOT a note_link row. The
+//      editor renders this as plain non-clickable text.
+//
+//   4. This step runs ONLY for the Obsidian source; the Notion import
+//      page ignores it entirely (Notion internal-link resolution remains
+//      out of scope per the spec).
+//
+// `createdDescriptors` is an array of { noteId, folderId, title, content }
+// from the just-finished importApply step. We need the db helpers passed
+// in explicitly to avoid a circular import (this file is a pure parser,
+// not an editor module).
+//
+// Returns counters {linksCreated, wikilinksProcessed, dangling} so the
+// Obsidian import page can surface them in its "Import complete" card.
+
+export async function convertWikilinksInImportedNotes(
+  createdDescriptors,
+  { updateNote, createNoteLink },
+) {
+  const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
+  let linksCreated = 0;
+  let wikilinksProcessed = 0;
+  let dangling = 0;
+
+  // Build a title → id lookup for the just-imported set. Key is
+  // case-folded so we match "Target Name", "target name", "TARGET NAME".
+  const importedByTitle = new Map();
+  for (const d of createdDescriptors) {
+    importedByTitle.set((d.title || "").toLowerCase(), d);
+  }
+
+  for (const { noteId, content } of createdDescriptors) {
+    if (!content || typeof content !== "string") continue;
+    // The `content` we have is the original (pre-update) body, which is
+    // correct for wikilink resolution — we walk once per note and only
+    // mutate body via updateNote in this same iteration.
+    let body = content;
+
+    const replacements = [];
+    let m;
+    WIKILINK_RE.lastIndex = 0;
+    while ((m = WIKILINK_RE.exec(body)) !== null) {
+      const targetName = (m[1] || "").trim();
+      if (!targetName) continue;
+      wikilinksProcessed += 1;
+
+      const match = importedByTitle.get(targetName.toLowerCase());
+      if (match && String(match.noteId) !== String(noteId)) {
+        // Matched another imported note → real mention token.
+        replacements.push({
+          index: m.index,
+          length: m[0].length,
+          replacement: `@[${match.noteId}|${match.title || targetName}]`,
+          targetNoteId: match.noteId,
+        });
+      } else {
+        // Dangling → display-only @Target text. The editor's
+        // deserialize step (resolveMentionNode) won't find a note
+        // with id matching just "Target", so this renders as plain
+        // text — exactly the display-only behavior the spec wants.
+        dangling += 1;
+        replacements.push({
+          index: m.index,
+          length: m[0].length,
+          replacement: `@${targetName}`,
+          targetNoteId: null,
+        });
+      }
+    }
+
+    if (replacements.length === 0) continue;
+
+    // Apply replacements in reverse order so indices stay stable.
+    for (let i = replacements.length - 1; i >= 0; i--) {
+      const r = replacements[i];
+      body =
+        body.slice(0, r.index) + r.replacement + body.slice(r.index + r.length);
+    }
+
+    // Write the updated body back.
+    try {
+      await updateNote(noteId, { body });
+    } catch (err) {
+      console.warn(
+        "convertWikilinksInImportedNotes: updateNote failed for note " +
+          noteId +
+          ":",
+        err,
+      );
+    }
+
+    // Create real note_link rows for matched targets.
+    for (const r of replacements) {
+      if (!r.targetNoteId) continue;
+      try {
+        await createNoteLink(noteId, r.targetNoteId);
+        linksCreated += 1;
+      } catch (err) {
+        console.warn(
+          "convertWikilinksInImportedNotes: createNoteLink failed for " +
+            noteId +
+            " -> " +
+            r.targetNoteId +
+            ":",
+          err,
+        );
+      }
+    }
+  }
+
+  return { linksCreated, wikilinksProcessed, dangling };
 }

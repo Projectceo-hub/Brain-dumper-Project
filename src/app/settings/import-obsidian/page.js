@@ -1,10 +1,19 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
-import { getAllFolders, createFolder, createNote } from "@/lib/db";
-import { parseObsidianZip } from "@/lib/obsidianImport";
+import {
+  getAllFolders,
+  createFolder,
+  createNote,
+  updateNote,
+  createNoteLink,
+} from "@/lib/db";
+import {
+  parseObsidianZip,
+  convertWikilinksInImportedNotes,
+} from "@/lib/obsidianImport";
 import {
   useImportFlow,
   PhaseSteps,
@@ -13,26 +22,31 @@ import {
   uniqueFolderCount,
 } from "@/components/importFlow";
 
-// Obsidian import flow (Phase 6 Part B).
+// Obsidian import flow (Phase 6 Part B + Phase 6 Part C).
 //
-// This page reuses the same propose-then-approve state machine and the
-// same AI-organize backend route (/api/import-organize, with
-// source:"obsidian") as the Notion import page. The only thing that
-// differs from Part A is:
-//   - The parser (parseObsidianZip from src/lib/obsidianImport.js),
-//     which skips the .obsidian/ and .trash/ config folders and preserves
-//     [[wikilinks]] verbatim as literal text.
-//   - The page copy / skipped-file summary fields (Obsidian doesn't have
-//     HTML files or nested zips, but it does have a config-skipped count).
-//
-// `[[wikilink]]` syntax is preserved character-for-character in the
-// imported note body — it is NOT parsed or converted here. That resolution
-// work is Phase 6 Part C and depends on this phase storing the raw text
-// intact.
+// This page reuses the propose-then-approve state machine and the same
+// AI-organize backend route as the Notion import page. What is unique to
+// the Obsidian flow:
+//   - The parser (parseObsidianZip) skips the .obsidian/ and .trash/
+//     config folders and preserves [[wikilinks]] verbatim as literal text.
+//   - AFTER approval, this page runs the Phase 6 Part C post-step —
+//     `convertWikilinksInImportedNotes` — which scans every just-imported
+//     note body for `[[Target]]` patterns and converts matched ones into
+//     real `@[noteId|title]` mention tokens + note_link rows. Dangling
+//     wikilinks become display-only `@Target` text. This step runs only on
+//     the Obsidian path; the Notion import page does not import the converter.
 
 export default function ImportObsidianPage() {
   const router = useRouter();
   const fileInputRef = useRef(null);
+
+  // Counters surfaced in the "Import complete" card after the wikilink
+  // post-step has run.
+  const [wikilinkStats, setWikilinkStats] = useState({
+    linksCreated: 0,
+    wikilinksProcessed: 0,
+    dangling: 0,
+  });
 
   const flow = useImportFlow({ parse: parseObsidianZip, source: "obsidian" });
   const {
@@ -46,12 +60,20 @@ export default function ImportObsidianPage() {
     handleFileChosen,
     handleContinueToAI,
     handleCancel,
-    handleStartOver,
+    handleStartOver: flowStartOver,
     handleAddFolderBucket,
     handleMovePage,
     handleRenameBucket,
     handleApply,
   } = flow;
+
+  // Wrap flowStartOver so we also clear the wikilink stats when the user
+  // restarts the import flow — otherwise a previous import's counters
+  // would leak into the next run's done card.
+  const handleStartOver = () => {
+    setWikilinkStats({ linksCreated: 0, wikilinksProcessed: 0, dangling: 0 });
+    flowStartOver();
+  };
 
   const handlePickFile = () => {
     if (fileInputRef.current) fileInputRef.current.click();
@@ -349,7 +371,34 @@ export default function ImportObsidianPage() {
               <div className="flex flex-wrap gap-3">
                 <button
                   type="button"
-                  onClick={() => handleApply({ createFolder, createNote })}
+                  onClick={async () => {
+                    const createdDescriptors = await handleApply({
+                      createFolder,
+                      createNote,
+                    });
+                    // Phase 6 Part C: post-approval [[wikilink]] conversion.
+                    // Only runs when notes were actually created; if
+                    // handleApply threw partway, descriptors may be a
+                    // partial list and the converter will simply process
+                    // whatever is in it (it tolerates partial sets safely).
+                    if (Array.isArray(createdDescriptors) && createdDescriptors.length > 0) {
+                      try {
+                        const stats = await convertWikilinksInImportedNotes(
+                          createdDescriptors,
+                          { updateNote, createNoteLink },
+                        );
+                        setWikilinkStats(stats);
+                      } catch (err) {
+                        console.warn(
+                          "Obsidian wikilink conversion step failed:",
+                          err,
+                        );
+                        // The import itself already succeeded — don't flip the
+                        // card to the error state just because the post-step
+                        // blew up; just leave stats at zero and continue.
+                      }
+                    }
+                  }}
                   className="rounded-full px-5 py-2.5 font-sans text-sm font-semibold shadow-md transition-all active:scale-[0.98]"
                   style={{ background: "var(--accent)", color: "#fff" }}
                 >
@@ -413,14 +462,25 @@ export default function ImportObsidianPage() {
                 <span className="font-semibold">
                   {applyProgress.notesCreated} notes
                 </span>{" "}
-                to your MindCanvas. Any{" "}
+                to your MindCanvas. We then converted{" "}
                 <code
                   className="font-mono text-xs px-1 rounded"
                   style={{ background: "var(--border)", color: "var(--text-primary)" }}
                 >
                   [[wikilinks]]
                 </code>{" "}
-                were preserved as literal text inside each note.
+                to clickable notes:{" "}
+                <span className="font-semibold">{wikilinkStats.linksCreated}</span>{" "}
+                link{wikilinkStats.linksCreated === 1 ? "" : "s"} created
+                {wikilinkStats.dangling > 0 && (
+                  <>
+                    ,{" "}
+                    <span className="font-semibold">{wikilinkStats.dangling}</span>{" "}
+                    dangling {wikilinkStats.dangling === 1 ? "link" : "links"} left as
+                    plain text
+                  </>
+                )}
+                .
               </p>
               <div className="flex flex-wrap gap-3 mt-5">
                 <button

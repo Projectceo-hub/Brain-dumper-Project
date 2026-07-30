@@ -171,8 +171,31 @@ body {
  * keyframe-based fade-in on route change that feels like an app, not a
  * website. Per the spec: <250ms, slight upward translate, ease-out.
  */
+/*
+ * FILL-MODE MATTERS HERE — do not change `backwards` back to `both`.
+ *
+ * `page-enter` ends on `transform: translateY(0)`. That computes to
+ * matrix(1,0,0,1,0,0), which is NOT `none` — and per CSS spec ANY element
+ * with a non-none transform becomes the containing block for its
+ * `position: fixed` descendants.
+ *
+ * With `both` (forwards + backwards), that final transform was retained
+ * FOREVER after the 180ms animation finished. Every route page therefore
+ * permanently anchored its fixed children to itself instead of to the
+ * viewport. The note editor overlay (`fixed inset-0`) consequently sized
+ * itself to the full page height rather than the viewport — measured at
+ * 2151px against a 606px viewport — which pushed the "Visualize this note"
+ * button ~1500px below the fold and produced a second document-level
+ * scrollbar on top of the overlay's own.
+ *
+ * `backwards` keeps the pre-animation fill (irrelevant here since there is
+ * no delay, but harmless) and drops the forwards fill, so once the
+ * animation completes the element reverts to `transform: none` and stops
+ * being a containing block. The `to` state is identical to the element's
+ * natural state (opacity 1, no transform), so there is zero visual change.
+ */
 .route-enter {
-  animation: page-enter 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: page-enter 180ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 /* ------------------------------------------------------------------ */
@@ -356,6 +379,113 @@ body {
 
 .note-row:hover {
   background-color: var(--card-hover);
+}
+
+/* ------------------------------------------------------------------ */
+/* @mention tokens in the note editor (Phase 6 Part C)                 */
+/* ------------------------------------------------------------------ */
+/*
+ * These are atomic, contenteditable=false spans rendered by the editor's
+ * serialize/deserialize helpers. Both styles use only the active theme's
+ * custom properties so they look correct in every theme (warm-canvas,
+ * dark-studio, midnight, sepia, slate) without any JS DOM-style mutation.
+ */
+
+.mention-token {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin: 0 1px;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
+  transition: background 120ms ease-out;
+}
+
+.mention-token:hover {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+/* Deleted-target fallback: a [[wikilink]] (from import) or @mention whose
+ * target note has been deleted renders as plain gray non-clickable text.
+ * It keeps the same padding so the body layout doesn't shift, but no
+ * background, no pointer, no link affordance. */
+.mention-token-ghost {
+  color: var(--text-muted);
+  padding: 1px 2px;
+  margin: 0 1px;
+  cursor: default;
+  user-select: text;
+  font-style: italic;
+  opacity: 0.85;
+}
+
+/* The @picker dropdown shown while typing `@query`. Positioned absolutely
+ * inside the editor wrapper in /folder/[id]/page.js. */
+.mention-dropdown {
+  position: absolute;
+  z-index: 10;
+  min-width: 220px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--surface-solid);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px -10px rgba(0, 0, 0, 0.25);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  /* Drop in just below the caret line. The editor wrapper is positioned
+   * relative, so this anchors to the editor's top edge — same place the
+   * prototype anchored. */
+  top: 2.5rem;
+  left: 0;
+}
+
+.mention-dropdown-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-primary);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+
+.mention-dropdown-row:last-child {
+  border-bottom: none;
+}
+
+.mention-dropdown-row-active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  font-weight: 600;
+}
+
+.mention-dropdown-row-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mention-dropdown-row-folder {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-weight: 400;
+}
+
+/* Contenteditable placeholder — the previous <textarea> relied on the
+ * `placeholder` attribute; contenteditable elements don't support that,
+ * so we drive a CSS :empty:before pseudo-element from the editor's
+ * data-ph attribute. Same --text-muted colour the active theme already
+ * uses for textarea placeholders, so the empty-editor look matches what
+ * the user is used to. */
+.themed-placeholder-CE:empty:before {
+  content: attr(data-ph);
+  color: var(--text-muted);
+  pointer-events: none;
 }
 
 /* ------------------------------------------------------------------ */
