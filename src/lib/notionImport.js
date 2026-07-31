@@ -48,6 +48,28 @@ function cleanNotionName(rawName) {
   return cleaned || rawName;
 }
 
+// Capturing counterpart of NOTION_HEX_ID.
+//
+// `cleanNotionName` above uses the non-capturing constant purely to STRIP
+// the id so titles read nicely. That threw away the only stable identifier
+// Notion gives us: the slugified-title portion of a page name/URL drifts
+// whenever a page is renamed, but this 32-hex id does not. We now also
+// extract it, so internal-page links can be resolved by id rather than by
+// a title that may have changed.
+//
+// Kept as a separate regex rather than reusing/refactoring the original —
+// same pattern, but with a capture group and anchored identically.
+const NOTION_HEX_ID_CAPTURE = / ([0-9a-f]{32})(?=\.[a-z]+$|$)/i;
+
+// Extracts the 32-hex Notion page id from an exported file/folder name.
+// Returns a lowercased id, or null when the name carries no id (hand-made
+// files, or exports from tools that strip the suffix).
+export function extractNotionPageIdFromName(rawName) {
+  if (!rawName || typeof rawName !== "string") return null;
+  const m = NOTION_HEX_ID_CAPTURE.exec(rawName);
+  return m ? m[1].toLowerCase() : null;
+}
+
 // Read a .md entry's real byte content as decoded UTF-8 text.
 //
 // ROBUSTNESS NOTES (Phase 6, second fix attempt):
@@ -184,8 +206,12 @@ async function walkZip(zip, prefix, acc) {
     }
 
     // kind === "md" — read the actual content.
-    const title = cleanNotionName(leafName.replace(/\.md$/i, ""));
+    const bareLeafName = leafName.replace(/\.md$/i, "");
+    const title = cleanNotionName(bareLeafName);
     const path = fullFolder.join(" / ");
+    // Stable identity for internal-link resolution. Null for files whose
+    // name carries no id — those simply can't be link targets.
+    const notionPageId = extractNotionPageIdFromName(bareLeafName);
 
     // Capture a tiny debug probe for the first 3 .md files we attempt to
     // read. This is what surfaces in the summary card so if content still
@@ -224,7 +250,7 @@ async function walkZip(zip, prefix, acc) {
       continue;
     }
 
-    acc.pages.push({ title, content, path });
+    acc.pages.push({ title, content, path, notionPageId });
   }
 }
 
@@ -298,4 +324,223 @@ export async function parseNotionZip(file) {
     zipsRecursed: acc.zipsRecursed,
     debug: acc.debug,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6 Part C: Notion internal-page link → @mention conversion
+// ---------------------------------------------------------------------------
+//
+// Notion's Markdown export renders an internal page link as a standard
+// Markdown link whose href is an absolute app.notion.com URL:
+//
+//   See also: [MC Link Test — Target Page](https://app.notion.com/p/MC-Link-Test-Target-Page-3ad3ce7d8fc881b1a79cfb112a24113d?pvs=21)
+//
+// The link text is the target page's title verbatim, and the URL ends in
+// {slugified-title}-{32-hex-page-id} plus an optional query string. Only
+// the 32-hex id is stable — the slug is derived from the title and drifts
+// on rename — so we match on the id and never parse the slug.
+//
+// This mirrors `convertWikilinksInImportedNotes` in obsidianImport.js rule
+// for rule; that function is deliberately NOT touched or shared. The rules:
+//
+//   1. Match by 32-hex Notion page id against other pages in the SAME
+//      import run (createdDescriptors), using the id embedded in each
+//      exported file's own filename. Same batch-scoping as Obsidian, which
+//      exists to avoid false positives against pre-existing notes.
+//
+//   2. Matched → replace the whole `[text](url)` with `@[matchedNoteId|Title]`
+//      in the body (via updateNote) and call createNoteLink(thisNoteId,
+//      matchedNoteId) to record a real connection.
+//
+//   3. No match (target page wasn't included in this export, or has no id)
+//      → replace the whole Markdown link with the display-only `@Text`
+//      form, exactly as a dangling [[wikilink]] is handled. No note_links
+//      row. The editor renders it as plain non-clickable text.
+//
+//   4. A page linking to itself is treated as dangling, matching Obsidian
+//      (and createNoteLink refuses self-links anyway).
+//
+//   5. Fully offline. The URL is never fetched — it is only pattern-matched.
+//
+// Markdown links that are NOT Notion page links (external URLs, images,
+// relative paths) are left completely untouched and are not counted.
+
+// A Markdown link: [text](url). Link text may not contain `]` or a newline.
+const NOTION_MD_LINK_RE = /\[([^\]\n]*)\]\(\s*([^)\s]+)\s*\)/g;
+
+// A Notion host. app.notion.com is what current exports emit; notion.so and
+// www.notion.so are accepted too because older/other exports use them and
+// the 32-hex id requirement below already makes false positives unlikely.
+const NOTION_HOST_RE =
+  /^https?:\/\/(?:[a-z0-9-]+\.)*notion\.(?:com|so)\//i;
+
+// The 32-hex page id sits at the very end of the URL path — immediately
+// before `?`/`#` or the end of the string. Anchoring it this way means we
+// never depend on the slug portion.
+const NOTION_URL_PAGE_ID_RE = /([0-9a-f]{32})(?=[?#]|$)/i;
+
+// A RELATIVE link to another exported .md file. This is what Notion
+// actually emits when the linked page is included in the same export
+// (subpages under a parent), instead of an absolute app.notion.com URL:
+//
+//   MC%20Link%20Test%20%E2%80%94%20Target%20Page%203ad3ce7d8fc881b1a79cfb112a24113d.md
+//
+// The title portion is percent-encoded but the id and the extension never
+// are, so anchoring on ".md" always yields the 32 hex chars immediately
+// before the extension. Only one position in the string can satisfy
+// "32 hex chars followed directly by .md", so this is unambiguous even
+// though the encoded separator (%20) ends in a hex-looking digit.
+const NOTION_MD_PATH_ID_RE = /([0-9a-f]{32})\.md(?:[?#]|$)/i;
+
+// Returns the lowercased 32-hex page id for a Notion internal-page link, or
+// null if this href isn't one. Pure string work — no network access.
+//
+// Handles both shapes a Notion Markdown export produces:
+//   1. Absolute:  https://app.notion.com/p/Some-Title-{32hex}?pvs=21
+//                 (emitted when the target page is NOT in this export)
+//   2. Relative:  Some%20Title%20{32hex}.md  — or the already-decoded
+//                 "Some Title {32hex}.md" — emitted when the target page
+//                 IS in the same export.
+export function extractNotionPageIdFromUrl(url) {
+  if (!url || typeof url !== "string") return null;
+  const raw = url.trim();
+  if (!raw) return null;
+
+  // Absolute URLs stay host-gated so a 32-hex id sitting in some unrelated
+  // third-party URL is never mistaken for a Notion page.
+  const isAbsolute = /^[a-z][a-z0-9+.-]*:/i.test(raw) || raw.startsWith("//");
+  if (isAbsolute) {
+    if (!NOTION_HOST_RE.test(raw)) return null;
+    const m = NOTION_URL_PAGE_ID_RE.exec(raw);
+    if (m) return m[1].toLowerCase();
+    // An absolute Notion URL can still point straight at an exported file.
+    const md = NOTION_MD_PATH_ID_RE.exec(raw);
+    return md ? md[1].toLowerCase() : null;
+  }
+
+  // Relative path — must end in {32hex}.md to count. Try the raw form
+  // first, then a percent-decoded form in case the export encoded the
+  // extension separator too. Decoding can throw on malformed sequences,
+  // so it is guarded and simply skipped when it fails.
+  const candidates = [raw];
+  try {
+    const decoded = decodeURIComponent(raw);
+    if (decoded !== raw) candidates.push(decoded);
+  } catch {
+    // Malformed percent-encoding — the raw attempt above still stands.
+  }
+
+  for (const candidate of candidates) {
+    const m = NOTION_MD_PATH_ID_RE.exec(candidate);
+    if (m) return m[1].toLowerCase();
+  }
+  return null;
+}
+
+// `createdDescriptors` is the array returned by importFlow's handleApply:
+// { noteId, folderId, title, content, notionPageId }. The db helpers are
+// passed in explicitly to keep this file a pure parser with no circular
+// import back into the editor/db layer — same contract the Obsidian
+// converter uses.
+//
+// Returns { linksCreated, notionLinksProcessed, dangling } for the import
+// page's "Import complete" card.
+export async function convertNotionLinksInImportedNotes(
+  createdDescriptors,
+  { updateNote, createNoteLink },
+) {
+  let linksCreated = 0;
+  let notionLinksProcessed = 0;
+  let dangling = 0;
+
+  if (!Array.isArray(createdDescriptors) || createdDescriptors.length === 0) {
+    return { linksCreated, notionLinksProcessed, dangling };
+  }
+
+  // Build a Notion page id → descriptor lookup for the just-imported set.
+  // Pages whose filename carried no id can't be link targets, so they are
+  // simply absent from the map.
+  const importedByPageId = new Map();
+  for (const d of createdDescriptors) {
+    if (d && d.notionPageId) {
+      importedByPageId.set(String(d.notionPageId).toLowerCase(), d);
+    }
+  }
+
+  for (const { noteId, content } of createdDescriptors) {
+    if (!content || typeof content !== "string") continue;
+    let body = content;
+
+    const replacements = [];
+    let m;
+    NOTION_MD_LINK_RE.lastIndex = 0;
+    while ((m = NOTION_MD_LINK_RE.exec(body)) !== null) {
+      const linkText = (m[1] || "").trim();
+      const url = m[2] || "";
+
+      const targetPageId = extractNotionPageIdFromUrl(url);
+      // Not a Notion internal-page link — leave it exactly as authored.
+      if (!targetPageId) continue;
+
+      notionLinksProcessed += 1;
+
+      const match = importedByPageId.get(targetPageId);
+      if (match && String(match.noteId) !== String(noteId)) {
+        replacements.push({
+          index: m.index,
+          length: m[0].length,
+          replacement: `@[${match.noteId}|${match.title || linkText}]`,
+          targetNoteId: match.noteId,
+        });
+      } else {
+        // Dangling → display-only `@Text`, identical to the Obsidian path.
+        dangling += 1;
+        replacements.push({
+          index: m.index,
+          length: m[0].length,
+          replacement: `@${linkText || "Untitled"}`,
+          targetNoteId: null,
+        });
+      }
+    }
+
+    if (replacements.length === 0) continue;
+
+    // Apply in reverse order so earlier indices stay valid.
+    for (let i = replacements.length - 1; i >= 0; i--) {
+      const r = replacements[i];
+      body =
+        body.slice(0, r.index) + r.replacement + body.slice(r.index + r.length);
+    }
+
+    try {
+      await updateNote(noteId, { body });
+    } catch (err) {
+      console.warn(
+        "convertNotionLinksInImportedNotes: updateNote failed for note " +
+          noteId +
+          ":",
+        err,
+      );
+    }
+
+    for (const r of replacements) {
+      if (!r.targetNoteId) continue;
+      try {
+        await createNoteLink(noteId, r.targetNoteId);
+        linksCreated += 1;
+      } catch (err) {
+        console.warn(
+          "convertNotionLinksInImportedNotes: createNoteLink failed for " +
+            noteId +
+            " -> " +
+            r.targetNoteId +
+            ":",
+          err,
+        );
+      }
+    }
+  }
+
+  return { linksCreated, notionLinksProcessed, dangling };
 }

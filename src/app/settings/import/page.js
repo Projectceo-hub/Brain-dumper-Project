@@ -1,10 +1,19 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
-import { getAllFolders, createFolder, createNote } from "@/lib/db";
-import { parseNotionZip } from "@/lib/notionImport";
+import {
+  getAllFolders,
+  createFolder,
+  createNote,
+  updateNote,
+  createNoteLink,
+} from "@/lib/db";
+import {
+  parseNotionZip,
+  convertNotionLinksInImportedNotes,
+} from "@/lib/notionImport";
 import {
   useImportFlow,
   PhaseSteps,
@@ -42,6 +51,15 @@ import {
 export default function ImportPage() {
   const router = useRouter();
   const fileInputRef = useRef(null);
+
+  // Phase 6 Part C: counters surfaced in the "Import complete" card after
+  // the Notion internal-page-link post-step has run. Mirrors the Obsidian
+  // page's wikilinkStats.
+  const [notionLinkStats, setNotionLinkStats] = useState({
+    linksCreated: 0,
+    notionLinksProcessed: 0,
+    dangling: 0,
+  });
 
   const flow = useImportFlow({ parse: parseNotionZip, source: "notion" });
   const {
@@ -357,7 +375,36 @@ export default function ImportPage() {
               <div className="flex flex-wrap gap-3">
                 <button
                   type="button"
-                  onClick={() => handleApply({ createFolder, createNote })}
+                  onClick={async () => {
+                    const createdDescriptors = await handleApply({
+                      createFolder,
+                      createNote,
+                    });
+                    // Phase 6 Part C: post-approval Notion internal-page
+                    // link conversion. Same contract as the Obsidian
+                    // wikilink step — runs only when notes were actually
+                    // created, tolerates a partial list if handleApply
+                    // threw partway, and never flips the card to the error
+                    // state just because the post-step failed (the import
+                    // itself already succeeded).
+                    if (
+                      Array.isArray(createdDescriptors) &&
+                      createdDescriptors.length > 0
+                    ) {
+                      try {
+                        const stats = await convertNotionLinksInImportedNotes(
+                          createdDescriptors,
+                          { updateNote, createNoteLink },
+                        );
+                        setNotionLinkStats(stats);
+                      } catch (err) {
+                        console.warn(
+                          "Notion internal-link conversion step failed:",
+                          err,
+                        );
+                      }
+                    }
+                  }}
                   className="rounded-full px-5 py-2.5 font-sans text-sm font-semibold shadow-md transition-all active:scale-[0.98]"
                   style={{ background: "var(--accent)", color: "#fff" }}
                 >
@@ -422,6 +469,27 @@ export default function ImportPage() {
                   {applyProgress.notesCreated} notes
                 </span>{" "}
                 to your MindCanvas.
+                {notionLinkStats.notionLinksProcessed > 0 && (
+                  <>
+                    {" "}
+                    We also converted Notion page links to clickable notes:{" "}
+                    <span className="font-semibold">
+                      {notionLinkStats.linksCreated}
+                    </span>{" "}
+                    link{notionLinkStats.linksCreated === 1 ? "" : "s"} created
+                    {notionLinkStats.dangling > 0 && (
+                      <>
+                        ,{" "}
+                        <span className="font-semibold">
+                          {notionLinkStats.dangling}
+                        </span>{" "}
+                        {notionLinkStats.dangling === 1 ? "link" : "links"} to
+                        pages outside this import left as plain text
+                      </>
+                    )}
+                    .
+                  </>
+                )}
               </p>
               <div className="flex flex-wrap gap-3 mt-5">
                 <button

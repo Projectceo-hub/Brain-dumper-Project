@@ -122,8 +122,19 @@ export function useImportFlow({ parse, source }) {
       // Re-attach content (AI response only carries title+path) by looking
       // up the original parsed page keyed by title+path.
       const contentByTitlePath = new Map();
+      // Phase 6 Part C: the Notion parser also yields a stable 32-hex page
+      // id per page, used later to resolve internal-page links. It is
+      // deliberately NOT sent to the AI (the request body above carries only
+      // title/content/path), so we re-attach it here off the same title+path
+      // key the content is re-attached with. Obsidian pages have no such id
+      // and simply carry null.
+      const pageIdByTitlePath = new Map();
       for (const pp of parsedPages) {
         contentByTitlePath.set(pp.title + "\u0001" + pp.path, pp.content);
+        pageIdByTitlePath.set(
+          pp.title + "\u0001" + pp.path,
+          pp.notionPageId || null,
+        );
       }
 
       const withKeys = orderedProposed.map((pf, idx) => ({
@@ -138,6 +149,8 @@ export function useImportFlow({ parse, source }) {
           title: p.title,
           path: p.path || "",
           content: contentByTitlePath.get(p.title + "\u0001" + p.path) || "",
+          notionPageId:
+            pageIdByTitlePath.get(p.title + "\u0001" + p.path) || null,
         })),
       }));
 
@@ -149,7 +162,12 @@ export function useImportFlow({ parse, source }) {
       }
       const orphans = parsedPages
         .filter((p) => !seenTitlePath.has(p.title + "\u0001" + p.path))
-        .map((p) => ({ title: p.title, path: p.path, content: p.content }));
+        .map((p) => ({
+          title: p.title,
+          path: p.path,
+          content: p.content,
+          notionPageId: p.notionPageId || null,
+        }));
       if (orphans.length > 0) {
         withKeys.push({
           folderKey: "pf-orphan",
@@ -267,6 +285,8 @@ export function useImportFlow({ parse, source }) {
             folderId,
             title: page.title,
             content: page.content,
+            // null for Obsidian; the 32-hex Notion page id otherwise.
+            notionPageId: page.notionPageId || null,
           });
         }
       }
