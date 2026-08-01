@@ -773,6 +773,14 @@ export async function getNoteLinks(noteId) {
   return out;
 }
 
+// Phase 7A: bulk read of every locally-cached note_link row, for the graph
+// view. The Dexie note_links store carries no userId column, so callers
+// must scope results themselves — the graph does this by dropping any link
+// whose endpoints aren't both present in its (already user-scoped) node set.
+export async function getAllNoteLinks() {
+  return db.note_links.toArray();
+}
+
 // Removes a specific (source -> target) link from both Dexie and Supabase.
 export async function deleteNoteLink(sourceNoteId, targetNoteId) {
   if (!sourceNoteId || !targetNoteId) return;

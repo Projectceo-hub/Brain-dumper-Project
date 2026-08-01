@@ -1,5 +1,5 @@
 import { Inter } from "next/font/google";
-import { Fraunces } from "next/font/google";
+import { Instrument_Serif } from "next/font/google";
 import AuthGate from "@/components/AuthGate";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import ThemeProvider from "@/components/ThemeProvider";
@@ -10,9 +10,12 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
-const fraunces = Fraunces({
-  variable: "--font-fraunces",
+// Phase 7B display face. Instrument Serif ships a single weight (400);
+// the mockups use it at 16-20px for note/page titles only.
+const instrumentSerif = Instrument_Serif({
+  variable: "--font-instrument-serif",
   subsets: ["latin"],
+  weight: "400",
 });
 
 // PWA manifest + Apple web-app metadata. Next.js renders these into the
@@ -41,7 +44,7 @@ export default function RootLayout({ children }) {
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${fraunces.variable} h-full antialiased`}
+      className={`${inter.variable} ${instrumentSerif.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col" style={{ background: "var(--bg)" }}>
         <ThemeProvider>

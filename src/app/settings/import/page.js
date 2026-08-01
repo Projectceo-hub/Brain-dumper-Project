@@ -101,14 +101,19 @@ export default function ImportPage() {
   };
 
   const pageBg = { background: "var(--bg)" };
-  const card = { background: "var(--surface)", borderRadius: "16px" };
+  const card = {
+    background: "var(--card-bg)",
+    borderRadius: "var(--radius-panel)",
+    border: "1px solid var(--border-1)",
+    boxShadow: "var(--shadow-card)",
+  };
 
   return (
     <div className="flex min-h-screen" style={pageBg}>
       <Sidebar />
 
       <div
-        className="relative min-h-screen flex-1 px-5 pt-6 pb-8 lg:pl-5 pl-14"
+        className="relative min-h-screen flex-1 px-5 pt-6 pb-40 lg:px-8 lg:pb-8"
         style={pageBg}
       >
         <div
@@ -128,7 +133,7 @@ export default function ImportPage() {
             SETTINGS &middot; IMPORTS
           </p>
           <h1
-            className="font-serif text-3xl font-bold mt-1"
+            className="mc-display text-[30px] mt-1"
             style={{ color: "var(--text-primary)" }}
           >
             Import from Notion
@@ -154,7 +159,7 @@ export default function ImportPage() {
 
           {errorMsg && (
             <div
-              className="p-3 mb-4 rounded-lg font-sans text-sm"
+              className="p-3 mb-4 rounded-[14px] font-sans text-sm"
               style={{
                 color: "#DC2626",
                 background: "rgba(220, 38, 38, 0.08)",
@@ -207,7 +212,7 @@ export default function ImportPage() {
           {phase === "summary" && (
             <div className="p-6" style={card}>
               <h2
-                className="font-serif text-xl font-bold"
+                className="mc-display text-[20px]"
                 style={{ color: "var(--text-primary)" }}
               >
                 Found {parsedPages.length}{" "}
@@ -263,7 +268,7 @@ export default function ImportPage() {
 
               {(debug && debug.length > 0) && (
                 <div
-                  className="mt-3 p-3 rounded-lg font-sans text-xs"
+                  className="mt-3 p-3 rounded-[14px] font-sans text-xs"
                   style={{
                     background: "color-mix(in srgb, var(--bg) 80%, var(--surface))",
                     border: "1px solid var(--border)",
@@ -343,7 +348,7 @@ export default function ImportPage() {
             <div className="flex flex-col gap-4">
               <div className="p-6" style={card}>
                 <h2
-                  className="font-serif text-xl font-bold"
+                  className="mc-display text-[20px]"
                   style={{ color: "var(--text-primary)" }}
                 >
                   Proposed folder layout
@@ -450,7 +455,7 @@ export default function ImportPage() {
           {phase === "done" && (
             <div className="p-6" style={card}>
               <h2
-                className="font-serif text-xl font-bold"
+                className="mc-display text-[20px]"
                 style={{ color: "var(--text-primary)" }}
               >
                 Import complete
@@ -519,7 +524,7 @@ export default function ImportPage() {
           {phase === "cancelled" && (
             <div className="p-6" style={card}>
               <h2
-                className="font-serif text-xl font-bold"
+                className="mc-display text-[20px]"
                 style={{ color: "var(--text-primary)" }}
               >
                 Import cancelled

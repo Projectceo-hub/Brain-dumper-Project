@@ -385,7 +385,7 @@ export function SamplePageList({ pages, max = 8 }) {
         Preview of first {Math.min(head.length, 10)} pages
       </p>
       <ul
-        className="rounded-lg overflow-hidden border"
+        className="rounded-[14px] overflow-hidden border"
         style={{ borderColor: "var(--border)" }}
       >
         {head.map((p, i) => (
@@ -483,7 +483,7 @@ function ProposalFolder({ bucket, allBuckets, onMovePage, onRenameBucket }) {
   );
 
   return (
-    <div className="p-4" style={{ background: "var(--surface)", borderRadius: "14px" }}>
+    <div className="p-4" style={{ background: "var(--card-bg)", borderRadius: "14px", border: "1px solid var(--border-1)" }}>
       <div className="flex items-center gap-2 mb-2">
         {editingName ? (
           <>
@@ -527,7 +527,7 @@ function ProposalFolder({ bucket, allBuckets, onMovePage, onRenameBucket }) {
         ) : (
           <>
             <h3
-              className="font-serif text-base font-bold truncate cursor-text"
+              className="mc-display text-[16px] truncate cursor-text"
               style={{ color: "var(--text-primary)" }}
               onClick={() => {
                 setDraftName(bucket.name);
@@ -574,7 +574,7 @@ function ProposalFolder({ bucket, allBuckets, onMovePage, onRenameBucket }) {
           {bucket.pages.map((page, idx) => (
             <li
               key={bucket.folderKey + "-" + page.title + "-" + idx}
-              className="flex flex-wrap items-center gap-3 px-3 py-2 rounded-lg"
+              className="flex flex-wrap items-center gap-3 px-3 py-2 rounded-[14px]"
               style={{ background: "var(--bg)" }}
             >
               <span

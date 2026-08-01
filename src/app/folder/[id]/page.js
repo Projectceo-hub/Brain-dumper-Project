@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeft, Plus, Network, Trash2 } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import {
   getFolderById,
@@ -844,45 +845,46 @@ export default function FolderPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bone" style={{ background: "var(--bg)" }}>
-        <p className="font-sans text-warm-gray animate-pulse">Loading notes...</p>
+      <div className="flex min-h-screen items-center justify-center" style={{ background: "var(--bg-primary)" }}>
+        <p className="animate-pulse text-[14px]" style={{ color: "var(--text-dim)" }}>Loading notes…</p>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-bone" style={{ background: "var(--bg)" }}>
+    <div className="flex min-h-screen" style={{ background: "var(--bg-primary)" }}>
       <Sidebar activeFolderId={folderId} />
 
-      <div className="relative min-h-screen flex-1 px-5 pt-6 pb-8 lg:pl-5 pl-14">
+      <div className="relative min-h-screen flex-1 px-5 pt-6 pb-40 lg:px-8 lg:pb-8">
       {/* Folder Header View */}
-      <div className="flex items-center gap-1 text-warm-gray hover:text-ink transition-colors cursor-pointer text-sm font-sans" onClick={() => router.push("/")}>
-        <span>←</span>
+      <div className="flex cursor-pointer items-center gap-1.5 text-[13px] transition-colors" style={{ color: "var(--text-dim)" }} onClick={() => router.push("/")}>
+        <ArrowLeft size={16} strokeWidth={1.8} />
         <span>Spaces</span>
       </div>
 
       <header className="mt-4">
-        <p className="text-warm-gray-light font-sans text-xs uppercase tracking-widest font-semibold">
+        <p className="text-[11px] font-medium uppercase tracking-[0.12em]" style={{ color: "var(--text-dim)" }}>
           FOLDER
         </p>
-        <h1 className="font-serif text-ink text-3xl font-bold mt-1">
+        <h1 className="mc-display mt-1 text-[30px]" style={{ color: "var(--text-strong)" }}>
           {folder?.name}
         </h1>
-        <p className="text-warm-gray font-sans text-sm mt-1">
+        <p className="mt-1 text-[13px]" style={{ color: "var(--text-dim)" }}>
           {notes.length} {notes.length === 1 ? "note" : "notes"}
         </p>
         <button
           onClick={handleCreateNote}
-          className="mt-4 bg-clay hover:bg-clay/95 text-bone font-sans text-sm font-medium px-4 py-2 rounded-full cursor-pointer transition-colors active:scale-[0.98]"
+          className="mc-btn-primary mt-4 active:scale-[0.98]"
         >
-          + New note
+          <Plus size={16} strokeWidth={1.8} />
+          New note
         </button>
       </header>
 
       {/* Note List */}
       <main className="mt-6 flex flex-col gap-3">
         {notes.length === 0 ? (
-          <div className="text-warm-gray font-sans text-center mt-12">
+          <div className="mt-12 text-center text-[14px]" style={{ color: "var(--text-dim)" }}>
             No notes yet. Tap + to create one.
           </div>
         ) : (
@@ -890,35 +892,34 @@ export default function FolderPage() {
             <div
               key={note.id}
               onClick={() => handleOpenEditor(note)}
-              className="stagger-item note-row rounded-xl p-4 cursor-pointer relative overflow-hidden"
-              style={{ animationDelay: `${idx * 20}ms`, background: "var(--surface)" }}
+              className="stagger-item note-row mc-card relative cursor-pointer overflow-hidden"
+              style={{ animationDelay: `${idx * 20}ms` }}
             >
               {/* Clay accent bar — slides in from top on hover, spec: 3px solid, 120ms ease */}
               <div className="note-row-accent" />
               <h2
-                className={`font-sans font-semibold text-base ${!note.title ? "italic" : ""}`}
+                className={`mc-card-title ${!note.title ? "italic" : ""}`}
                 style={{ color: note.title ? "var(--text-primary)" : "var(--text-muted)" }}
               >
                 {note.title || "Untitled"}
               </h2>
               <p
-                className="font-sans text-sm mt-1 line-clamp-2 leading-relaxed"
-                style={{ color: "var(--text-secondary)" }}
+                className="mc-card-body mt-2 line-clamp-2"
               >
                 {note.body ? renderBodyPreview(note.body) : "No content yet"}
               </p>
               <div className="flex items-center justify-between mt-4">
                 <span
-                  className="text-xs font-sans"
-                  style={{ color: "var(--text-muted)" }}
+                  className="mc-card-meta"
                 >
                   {getRelativeTimeString(note.updatedAt)}
                 </span>
                 <button
                   onClick={(e) => handleDeleteNote(e, note.id)}
-                  className="text-xs font-sans transition-colors cursor-pointer"
-                  style={{ color: "var(--text-muted)" }}
+                  className="flex cursor-pointer items-center gap-1 text-[11px] transition-colors"
+                  style={{ color: "var(--text-dim)" }}
                 >
+                  <Trash2 size={13} strokeWidth={1.8} />
                   Delete
                 </button>
               </div>
@@ -934,7 +935,7 @@ export default function FolderPage() {
            the footer is a sibling of that pane, so it is pinned to the
            bottom of the viewport without needing position:fixed and
            without overlapping the text. */
-        <div className="fixed inset-0 bg-bone z-50 flex flex-col overflow-hidden" style={{ background: "var(--bg)" }}>
+        <div className="fixed inset-0 z-50 flex flex-col overflow-hidden" style={{ background: "var(--bg-primary)" }}>
           {/* THE single scroll container for the note.
               `min-h-0` is load-bearing: a flex child defaults to
               `min-height:auto`, which refuses to shrink below its content
@@ -943,11 +944,11 @@ export default function FolderPage() {
           <div className="flex-1 min-h-0 overflow-y-auto px-5 pt-6 pb-16">
           {/* Back button */}
           <div
-            className="flex items-center gap-1 transition-colors cursor-pointer text-sm font-sans"
-            style={{ color: "var(--text-muted)" }}
+            className="flex cursor-pointer items-center gap-1.5 text-[13px] transition-colors"
+            style={{ color: "var(--text-dim)" }}
             onClick={handleCloseEditor}
           >
-            <span>←</span>
+            <ArrowLeft size={16} strokeWidth={1.8} />
             <span>Notes</span>
           </div>
 
@@ -957,7 +958,7 @@ export default function FolderPage() {
             value={editTitle}
             onChange={(e) => handleTitleChange(e.target.value)}
             placeholder="Note title"
-            className="themed-placeholder w-full font-serif text-2xl bg-transparent outline-none border-none mt-4 font-bold"
+            className="themed-placeholder mc-display mt-4 w-full border-none bg-transparent text-[26px] outline-none"
             style={{ color: "var(--text-primary)" }}
           />
 
@@ -979,7 +980,7 @@ export default function FolderPage() {
               onInput={handleEditorInput}
               onKeyDown={handleEditorKeyDown}
               data-ph="Start writing... use @ to mention a note"
-              className="themed-placeholder-CE w-full font-sans text-base bg-transparent outline-none border-none resize-none leading-relaxed min-h-[300px]"
+              className="themed-placeholder-CE w-full resize-none border-none bg-transparent text-[15px] leading-[1.65] outline-none min-h-[300px]"
               style={{
                 color: "var(--text-primary)",
                 whiteSpace: "pre-wrap",
@@ -1055,8 +1056,9 @@ export default function FolderPage() {
                 );
                 router.push(`/graph?note=${noteId}`);
               }}
-              className="border border-pine text-pine hover:bg-pine hover:text-bone font-sans text-sm px-6 py-2 rounded-full cursor-pointer transition-all active:scale-[0.98] font-semibold"
+              className="mc-btn-primary cursor-pointer px-6 active:scale-[0.98]"
             >
+              <Network size={16} strokeWidth={1.8} />
               Visualize this note
             </button>
           </div>

@@ -6,104 +6,75 @@
 /* block sets sane defaults that exactly match the "Warm Canvas"      */
 /* design so the app looks correct even before ThemeProvider mounts.  */
 /* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------ */
+/* PHASE 7B DESIGN TOKENS                                              */
+/* The default theme is retargeted to the approved Phase 7B palette.   */
+/* The other data-theme blocks below are legacy and were NOT part of   */
+/* the 7B redesign (light mode only was in scope).                     */
+/* ------------------------------------------------------------------ */
 :root,
 [data-theme="warm-canvas"] {
-  --bg: #F2EDE4;
-  --surface: rgba(255, 255, 255, 0.6);
+  /* --- 7B raw tokens (use these directly in new work) --- */
+  --bg-primary: #FFFEFB;
+  --bg-secondary: #FCFBF9;
+  --bg-neutral-100: #F5F3EF;
+  --bg-neutral-200: #F2F0EB;
+  --bg-neutral-300: #EDE9E2;
+  --dark-surface: #121212;
+  --dark-surface-2: #1E1E1E;
+  --accent-green: #7A8E5D;
+  --accent-green-hover: #6B7E52;
+  --accent-green-muted: #E8EADF;
+  --text-strong: #121212;
+  --text-body: #2A2926;
+  --text-body-2: #3A3835;
+  --text-dim: #8B877E;
+  --text-dim-2: #A8A49E;
+  --border-1: #E9E6E1;
+  --border-2: #EDE9E2;
+  --card-bg: #FFFFFF;
+
+  --radius-card: 24px;
+  --radius-panel: 20px;
+  --radius-chip: 9999px;
+  --radius-button: 9999px;
+  --radius-input: 9999px;
+
+  --shadow-card: 0 2px 16px rgba(0, 0, 0, 0.03);
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.06);
+  --shadow-fab: 0 8px 24px rgba(122, 142, 93, 0.45);
+  --shadow-capture: 0 12px 40px rgba(0, 0, 0, 0.12);
+
+  --sidebar-w: 280px;
+  --inspector-w: 340px;
+  --topbar-h: 56px;
+  --bottomnav-h: 72px;
+
+  /* --- semantic aliases consumed by pre-7B markup --- */
+  --bg: #FFFEFB;
+  --surface: #FFFFFF;
   --surface-solid: #FFFFFF;
-  --text-primary: #1C1912;
-  --text-secondary: #6B6459;
-  --text-muted: #8A8071;
-  --accent: #C4571F;
-  --accent-secondary: #3D6B5C;
-  --sidebar-bg: #1C1912;
-  --sidebar-text: #F2EDE4;
-  --sidebar-text-muted: #8A8071;
-  --border: rgba(139, 128, 113, 0.25);
-  --card-hover: rgba(237, 223, 203, 0.55);
+  --text-primary: #121212;
+  --text-secondary: #2A2926;
+  --text-muted: #8B877E;
+  --accent: #7A8E5D;
+  --accent-secondary: #6B7E52;
+  --sidebar-bg: #121212;
+  --sidebar-text: #FFFFFF;
+  --sidebar-text-muted: rgba(255, 255, 255, 0.6);
+  --border: #E9E6E1;
+  --card-hover: #F5F3EF;
 
   /* Keep legacy aliases in sync so existing Tailwind helpers that read
      --background / --foreground (body rule below + Tailwind theme inline)
      stay consistent with the active theme's --bg / --text-primary. */
-  --background: #F2EDE4;
-  --foreground: #1C1912;
+  --background: #FFFEFB;
+  --foreground: #121212;
 }
 
-[data-theme="dark-studio"] {
-  --bg: #1A1815;
-  --surface: #252220;
-  --surface-solid: #252220;
-  --text-primary: #E8E0D4;
-  --text-secondary: #A89880;
-  --text-muted: #7A6E62;
-  --accent: #D4651F;
-  --accent-secondary: #4A8A6F;
-  --sidebar-bg: #111009;
-  --sidebar-text: #E8E0D4;
-  --sidebar-text-muted: #7A6E62;
-  --border: rgba(232, 224, 212, 0.12);
-  --card-hover: rgba(232, 224, 212, 0.06);
-
-  --background: #1A1815;
-  --foreground: #E8E0D4;
-}
-
-[data-theme="midnight"] {
-  --bg: #0A0A0A;
-  --surface: #161616;
-  --surface-solid: #161616;
-  --text-primary: #F0EDE8;
-  --text-secondary: #9A9088;
-  --text-muted: #6A6058;
-  --accent: #C4571F;
-  --accent-secondary: #3D8A6F;
-  --sidebar-bg: #050505;
-  --sidebar-text: #F0EDE8;
-  --sidebar-text-muted: #6A6058;
-  --border: rgba(240, 237, 232, 0.1);
-  --card-hover: rgba(240, 237, 232, 0.05);
-
-  --background: #0A0A0A;
-  --foreground: #F0EDE8;
-}
-
-[data-theme="sepia"] {
-  --bg: #F5EDD6;
-  --surface: rgba(253, 246, 227, 0.8);
-  --surface-solid: #FDF6E3;
-  --text-primary: #2C1F0E;
-  --text-secondary: #5C4A2A;
-  --text-muted: #8C7A5A;
-  --accent: #A8380A;
-  --accent-secondary: #4A6A30;
-  --sidebar-bg: #2C1F0E;
-  --sidebar-text: #F5EDD6;
-  --sidebar-text-muted: #8C7A5A;
-  --border: rgba(44, 31, 14, 0.2);
-  --card-hover: rgba(44, 31, 14, 0.06);
-
-  --background: #F5EDD6;
-  --foreground: #2C1F0E;
-}
-
-[data-theme="slate"] {
-  --bg: #EEF2F7;
-  --surface: rgba(255, 255, 255, 0.75);
-  --surface-solid: #FFFFFF;
-  --text-primary: #0F1923;
-  --text-secondary: #4A5568;
-  --text-muted: #718096;
-  --accent: #C4571F;
-  --accent-secondary: #2B5DA8;
-  --sidebar-bg: #0F1923;
-  --sidebar-text: #EEF2F7;
-  --sidebar-text-muted: #718096;
-  --border: rgba(15, 25, 35, 0.15);
-  --card-hover: rgba(15, 25, 35, 0.05);
-
-  --background: #EEF2F7;
-  --foreground: #0F1923;
-}
+/* Phase 7B: the dark-studio / midnight / sepia / slate palettes were
+ * removed with the legacy theme selector. Only the redesigned light
+ * theme (data-theme="warm-canvas", shown as "Matcha") ships. */
 
 @theme inline {
   /* Core palette */
@@ -121,8 +92,29 @@
   --color-graph-bg: #14110D;
   --color-graph-line: #3A352C;
 
-  /* Typography */
-  --font-serif: var(--font-fraunces);
+  /* Phase 7B palette exposed as Tailwind colour utilities
+     (bg-canvas, text-strong, border-hair, bg-sagegreen, ...) */
+  --color-canvas: #FFFEFB;
+  --color-canvas-2: #FCFBF9;
+  --color-neutral-100: #F5F3EF;
+  --color-neutral-200: #F2F0EB;
+  --color-neutral-300: #EDE9E2;
+  --color-dark: #121212;
+  --color-dark-2: #1E1E1E;
+  --color-sagegreen: #7A8E5D;
+  --color-sagegreen-hover: #6B7E52;
+  --color-sagegreen-muted: #E8EADF;
+  --color-strong: #121212;
+  --color-body: #2A2926;
+  --color-body-2: #3A3835;
+  --color-dim: #8B877E;
+  --color-dim-2: #A8A49E;
+  --color-hair: #E9E6E1;
+  --color-hair-2: #EDE9E2;
+
+  /* Typography — Instrument Serif is the 7B display face. */
+  --font-serif: var(--font-instrument-serif);
+  --font-display: var(--font-instrument-serif);
   --font-sans: var(--font-inter);
 }
 
@@ -589,4 +581,217 @@ body {
   }
 }
 
+
+
+/* ================================================================== */
+/* PHASE 7B — shared component classes                                */
+/* Derived from the approved mockups (public mockup refs: mobile.html, */
+/* desktop.html). Every radius here comes from the 7B radius tokens.   */
+/* ================================================================== */
+
+.mc-display {
+  font-family: var(--font-instrument-serif), ui-serif, Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+/* --- Note card (mobile + desktop list) --- */
+.mc-card {
+  width: 100%;
+  text-align: left;
+  background: var(--card-bg);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 200ms ease, transform 200ms ease;
+}
+.mc-card:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+.mc-card-meta {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+.mc-card-title {
+  font-family: var(--font-instrument-serif), ui-serif, Georgia, serif;
+  font-size: 18px;
+  line-height: 1.25;
+  color: var(--text-strong);
+  letter-spacing: -0.01em;
+}
+.mc-card-body {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #5A5752;
+}
+
+/* --- Tag chip with colour dot --- */
+.mc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-chip);
+  background: #F8F6F1;
+  border: 1px solid var(--border-2);
+  font-size: 11px;
+  font-weight: 500;
+  color: #5A5752;
+}
+.mc-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-chip);
+  background: var(--accent-green);
+}
+
+/* --- Buttons --- */
+.mc-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--accent-green);
+  color: #fff;
+  border-radius: var(--radius-button);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 18px;
+  transition: background 150ms ease;
+}
+.mc-btn-primary:hover { background: var(--accent-green-hover); }
+
+.mc-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #fff;
+  color: var(--text-strong);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-button);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 16px;
+  transition: background 150ms ease;
+}
+.mc-btn-secondary:hover { background: var(--bg-neutral-100); }
+
+/* --- Segmented control (All Notes / Digest) --- */
+.mc-segment {
+  display: inline-flex;
+  padding: 4px;
+  background: var(--bg-neutral-200);
+  border-radius: var(--radius-chip);
+}
+.mc-segment-item {
+  padding: 0 16px;
+  height: 28px;
+  border-radius: var(--radius-chip);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-dim);
+  transition: all 150ms ease;
+}
+.mc-segment-item[data-active="true"] {
+  background: var(--dark-surface);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* --- Dark sidebar (desktop) --- */
+.mc-sidebar {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  background: var(--dark-surface);
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+}
+.mc-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-button);
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.6);
+  transition: background 150ms ease, color 150ms ease;
+}
+.mc-nav-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+.mc-nav-item[data-active="true"] {
+  background: var(--dark-surface-2);
+  color: #fff;
+}
+
+/* --- Mobile bottom nav --- */
+.mc-bottomnav {
+  height: var(--bottomnav-h);
+  background: rgba(255, 254, 251, 0.9);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid var(--border-1);
+}
+.mc-bottomnav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 52px;
+  padding: 4px 0;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+}
+.mc-bottomnav-item[data-active="true"] { color: var(--accent-green); }
+
+/* --- Floating capture button (mobile FAB) --- */
+.mc-fab {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-button);
+  background: var(--accent-green);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-fab);
+  transition: background 150ms ease, transform 150ms ease;
+}
+.mc-fab:hover { background: var(--accent-green-hover); }
+.mc-fab:active { transform: scale(0.96); }
+
+/* --- Panels / inspector --- */
+.mc-panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-panel);
+  padding: 16px;
+}
+.mc-panel-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+}
+
+/* --- Inputs --- */
+.mc-input {
+  background: #fff;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-input);
+  padding: 10px 18px;
+  font-size: 13.5px;
+  color: var(--text-strong);
+  outline: none;
+}
+.mc-input:focus { border-color: var(--accent-green); }
 

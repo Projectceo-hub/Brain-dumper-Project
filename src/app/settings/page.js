@@ -5,18 +5,22 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import { createClient } from "@/lib/supabase/client";
-import { THEMES, getStoredTheme, setTheme } from "@/components/ThemeProvider";
+import {
+  THEMES,
+  COMING_SOON_THEMES,
+  getStoredTheme,
+  setTheme,
+} from "@/components/ThemeProvider";
 
 // Static hex values for the theme picker swatches. These mirror the CSS
 // custom properties defined per theme in globals.css. The swatch needs the
 // values up-front (before a theme is active) so we hardcode them here rather
 // than reading CSS vars from an inactive selector.
 const THEME_SWATCHES = {
-  "warm-canvas": { bg: "#F2EDE4", accent: "#C4571F" },
-  "dark-studio": { bg: "#1A1815", accent: "#D4651F" },
-  midnight: { bg: "#0A0A0A", accent: "#C4571F" },
-  sepia: { bg: "#F5EDD6", accent: "#A8380A" },
-  slate: { bg: "#EEF2F7", accent: "#C4571F" },
+  "warm-canvas": { bg: "#FFFEFB", accent: "#7A8E5D" },
+  forest: { bg: "#EDE9E2", accent: "#3F5D3A" },
+  ink: { bg: "#EDE9E2", accent: "#2A2926" },
+  dusk: { bg: "#EDE9E2", accent: "#6E6480" },
 };
 
 function Field({ label, children }) {
@@ -189,15 +193,17 @@ export default function SettingsPage() {
   };
 
   const cardStyle = {
-    background: "var(--surface)",
-    borderRadius: "16px",
+    background: "var(--card-bg)",
+    borderRadius: "var(--radius-panel)",
+    border: "1px solid var(--border-1)",
+    boxShadow: "var(--shadow-card)",
   };
 
   return (
     <div className="flex min-h-screen" style={{ background: "var(--bg)" }}>
       <Sidebar />
 
-      <div className="relative min-h-screen flex-1 px-5 pt-6 pb-8 lg:pl-5 pl-14" style={{ background: "var(--bg)" }}>
+      <div className="relative min-h-screen flex-1 px-5 pt-6 pb-40 lg:px-8 lg:pb-8" style={{ background: "var(--bg)" }}>
         <div
           className="flex items-center gap-1 text-sm font-sans cursor-pointer transition-colors"
           style={{ color: "var(--text-muted)" }}
@@ -214,14 +220,14 @@ export default function SettingsPage() {
           >
             SETTINGS
           </p>
-          <h1 className="font-serif text-3xl font-bold mt-1" style={{ color: "var(--text-primary)" }}>
+          <h1 className="mc-display text-[30px] mt-1" style={{ color: "var(--text-primary)" }}>
             Settings
           </h1>
         </header>
 
         {/* ----------------------------- Account ----------------------------- */}
         <section className="mt-8 max-w-3xl">
-          <h2 className="font-serif text-xl font-bold mb-3" style={{ color: "var(--text-primary)" }}>
+          <h2 className="mc-display text-[20px] mb-3" style={{ color: "var(--text-primary)" }}>
             Account
           </h2>
 
@@ -234,7 +240,7 @@ export default function SettingsPage() {
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="Your name"
                   maxLength={60}
-                  className="bg-transparent border rounded-lg px-3 py-2.5 font-sans text-sm outline-none transition-colors"
+                  className="bg-transparent border rounded-[14px] px-3 py-2.5 font-sans text-sm outline-none transition-colors"
                   style={{
                     color: "var(--text-primary)",
                     borderColor: "var(--border)",
@@ -258,7 +264,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="p-5 mb-4" style={cardStyle}>
-            <h3 className="font-serif text-lg font-bold" style={{ color: "var(--text-primary)" }}>
+            <h3 className="mc-display text-[18px]" style={{ color: "var(--text-primary)" }}>
               Change email
             </h3>
             <form onSubmit={handleChangeEmail} className="mt-3 flex flex-wrap items-end gap-3">
@@ -268,7 +274,7 @@ export default function SettingsPage() {
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
                   required
-                  className="bg-transparent border rounded-lg px-3 py-2.5 font-sans text-sm outline-none transition-colors"
+                  className="bg-transparent border rounded-[14px] px-3 py-2.5 font-sans text-sm outline-none transition-colors"
                   style={{
                     color: "var(--text-primary)",
                     borderColor: "var(--border)",
@@ -297,7 +303,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="p-5 mb-4" style={cardStyle}>
-            <h3 className="font-serif text-lg font-bold" style={{ color: "var(--text-primary)" }}>
+            <h3 className="mc-display text-[18px]" style={{ color: "var(--text-primary)" }}>
               Change password
             </h3>
             <form onSubmit={handleChangePassword} className="mt-3 flex flex-col gap-3">
@@ -308,7 +314,7 @@ export default function SettingsPage() {
                   onChange={(e) => setCurrentPw(e.target.value)}
                   required
                   autoComplete="current-password"
-                  className="bg-transparent border rounded-lg px-3 py-2.5 font-sans text-sm outline-none transition-colors"
+                  className="bg-transparent border rounded-[14px] px-3 py-2.5 font-sans text-sm outline-none transition-colors"
                   style={{
                     color: "var(--text-primary)",
                     borderColor: "var(--border)",
@@ -324,7 +330,7 @@ export default function SettingsPage() {
                     required
                     minLength={6}
                     autoComplete="new-password"
-                    className="bg-transparent border rounded-lg px-3 py-2.5 font-sans text-sm outline-none transition-colors"
+                    className="bg-transparent border rounded-[14px] px-3 py-2.5 font-sans text-sm outline-none transition-colors"
                     style={{
                       color: "var(--text-primary)",
                       borderColor: "var(--border)",
@@ -339,7 +345,7 @@ export default function SettingsPage() {
                     required
                     minLength={6}
                     autoComplete="new-password"
-                    className="bg-transparent border rounded-lg px-3 py-2.5 font-sans text-sm outline-none transition-colors"
+                    className="bg-transparent border rounded-[14px] px-3 py-2.5 font-sans text-sm outline-none transition-colors"
                     style={{
                       color: "var(--text-primary)",
                       borderColor: "var(--border)",
@@ -373,10 +379,10 @@ export default function SettingsPage() {
             className="p-5 mt-8"
             style={{
               border: `1px solid rgba(220, 38, 38, 0.4)`,
-              borderRadius: "16px",
+              borderRadius: "var(--radius-panel)",
             }}
           >
-            <h3 className="font-serif text-lg font-bold" style={{ color: "#DC2626" }}>
+            <h3 className="mc-display text-[18px]" style={{ color: "#DC2626" }}>
               Delete account
             </h3>
             <p className="font-sans text-sm mt-1 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
@@ -389,7 +395,7 @@ export default function SettingsPage() {
                   value={deleteConfirm}
                   onChange={(e) => setDeleteConfirm(e.target.value)}
                   placeholder="DELETE"
-                  className="bg-transparent border rounded-lg px-3 py-2.5 font-sans text-sm outline-none transition-colors"
+                  className="bg-transparent border rounded-[14px] px-3 py-2.5 font-sans text-sm outline-none transition-colors"
                   style={{
                     color: "var(--text-primary)",
                     borderColor: "rgba(220, 38, 38, 0.4)",
@@ -415,7 +421,7 @@ export default function SettingsPage() {
 
         {/* ----------------------------- Appearance ----------------------------- */}
         <section className="mt-12 max-w-3xl">
-          <h2 className="font-serif text-xl font-bold mb-3" style={{ color: "var(--text-primary)" }}>
+          <h2 className="mc-display text-[20px] mb-3" style={{ color: "var(--text-primary)" }}>
             Appearance
           </h2>
           <div className="p-5" style={cardStyle}>
@@ -464,13 +470,55 @@ export default function SettingsPage() {
                   </button>
                 );
               })}
+
+              {COMING_SOON_THEMES.map((t) => {
+                const swatch = THEME_SWATCHES[t.id];
+                return (
+                  <div
+                    key={t.id}
+                    className="flex cursor-not-allowed flex-col items-center gap-2 opacity-40"
+                    aria-disabled="true"
+                    title={`${t.name} — coming soon`}
+                  >
+                    <span
+                      className="flex items-center justify-center rounded-full"
+                      style={{
+                        width: 48,
+                        height: 48,
+                        background: swatch.bg,
+                        boxShadow: "0 0 0 1px var(--border-1)",
+                      }}
+                    >
+                      <span
+                        className="flex items-center justify-center rounded-full"
+                        style={{ width: 32, height: 32, background: swatch.accent }}
+                      />
+                    </span>
+                    <span
+                      className="font-sans text-[11px]"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      {t.name}
+                    </span>
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide"
+                      style={{
+                        background: "var(--bg-neutral-200)",
+                        color: "var(--text-dim)",
+                      }}
+                    >
+                      Coming Soon
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </section>
 
         {/* ----------------------------- Integrations ----------------------------- */}
         <section className="mt-12 max-w-3xl mb-16">
-          <h2 className="font-serif text-xl font-bold mb-3" style={{ color: "var(--text-primary)" }}>
+          <h2 className="mc-display text-[20px] mb-3" style={{ color: "var(--text-primary)" }}>
             Integrations
           </h2>
           <div className="flex flex-col gap-4">
@@ -481,7 +529,7 @@ export default function SettingsPage() {
             >
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-serif text-lg font-bold" style={{ color: "var(--text-primary)" }}>
+                  <h3 className="mc-display text-[18px]" style={{ color: "var(--text-primary)" }}>
                     API Tokens
                  </h3>
                   <p className="font-sans text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
@@ -501,7 +549,7 @@ export default function SettingsPage() {
             >
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-serif text-lg font-bold" style={{ color: "var(--text-primary)" }}>
+                  <h3 className="mc-display text-[18px]" style={{ color: "var(--text-primary)" }}>
                     Import from Notion
                   </h3>
                   <p className="font-sans text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
@@ -521,7 +569,7 @@ export default function SettingsPage() {
             >
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-serif text-lg font-bold" style={{ color: "var(--text-primary)" }}>
+                  <h3 className="mc-display text-[18px]" style={{ color: "var(--text-primary)" }}>
                     Import from Obsidian
                   </h3>
                   <p className="font-sans text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
@@ -540,7 +588,7 @@ export default function SettingsPage() {
             >
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-serif text-lg font-bold" style={{ color: "var(--text-primary)" }}>
+                  <h3 className="mc-display text-[18px]" style={{ color: "var(--text-primary)" }}>
                     Claude.ai Web Connector
                   </h3>
                   <p className="font-sans text-sm mt-1" style={{ color: "var(--text-secondary)" }}>

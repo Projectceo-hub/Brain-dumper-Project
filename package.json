@@ -15,6 +15,7 @@
     "@xyflow/react": "^12.11.2",
     "dexie": "^4.4.4",
     "jszip": "^3.10.1",
+    "lucide-react": "^1.28.0",
     "next": "16.2.10",
     "oidc-provider": "^9.9.1",
     "react": "19.2.4",

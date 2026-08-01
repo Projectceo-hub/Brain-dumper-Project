@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowUp } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import {
   hasAnyFolders,
@@ -11,6 +12,7 @@ import {
   createNote,
   createNotesFromTree,
   getNotesInFolder,
+  getAllNotesWithFolders,
   getOrCreateQuickNotesFolder,
   saveEntities,
   retryPendingSync
@@ -47,6 +49,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [folders, setFolders] = useState([]);
   const [noteCounts, setNoteCounts] = useState({});
+  const [recentNotes, setRecentNotes] = useState([]);
+  const [showAllSpaces, setShowAllSpaces] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState("work");
 
@@ -124,6 +128,16 @@ export default function Dashboard() {
         counts[folder.id] = notes.length;
       }
       setNoteCounts(counts);
+
+      // Recent notes: newest 5 by updatedAt. Sourced from the same Dexie
+      // helper the rest of the app uses (already user-scoped), sorted and
+      // sliced here rather than adding a new Supabase query.
+      const allNotes = await getAllNotesWithFolders();
+      const recent = allNotes
+        .slice()
+        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+        .slice(0, 5);
+      setRecentNotes(recent);
     } catch (err) {
       console.error("Failed to load dashboard data:", err);
     } finally {
@@ -245,19 +259,19 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bone" style={{ background: "var(--bg)" }}>
-        <p className="font-sans text-warm-gray animate-pulse">Loading MindCanvas...</p>
+      <div className="flex min-h-screen items-center justify-center" style={{ background: "var(--bg-primary)" }}>
+        <p className="animate-pulse text-[14px]" style={{ color: "var(--text-dim)" }}>Loading MindCanvas…</p>
       </div>
     );
   }
 
   if (showOnboarding) {
     return (
-      <div className="flex flex-col min-h-screen bg-bone items-center justify-center px-6" style={{ background: "var(--bg)" }}>
-        <h1 className="font-serif text-ink text-4xl text-center font-bold tracking-tight">
+      <div className="flex min-h-screen flex-col items-center justify-center px-6" style={{ background: "var(--bg-primary)" }}>
+        <h1 className="mc-display text-center text-[34px]" style={{ color: "var(--text-strong)" }}>
           What&apos;s on your mind?
         </h1>
-        <p className="font-sans text-warm-gray text-base mt-2 text-center max-w-sm">
+        <p className="mt-2 max-w-sm text-center text-[14px]" style={{ color: "var(--text-dim)" }}>
           Select a profile to seed your workspace with starter folders.
         </p>
 
@@ -266,10 +280,10 @@ export default function Dashboard() {
             <button
               key={profile}
               onClick={() => setSelectedProfile(profile)}
-              className={`py-3 px-6 rounded-full border transition-all text-sm font-semibold capitalize font-sans ${
+              className={`rounded-full border px-6 py-3 text-[14px] font-medium capitalize transition-all ${
                 selectedProfile === profile
-                  ? "bg-ink border-ink text-bone"
-                  : "bg-transparent border-warm-gray-light text-ink hover:bg-ink/5"
+                  ? "border-[#121212] bg-[#121212] text-white"
+                  : "border-[#E9E6E1] bg-transparent text-[#121212] hover:bg-[#F5F3EF]"
               }`}
             >
               {profile}
@@ -279,7 +293,7 @@ export default function Dashboard() {
 
         <button
           onClick={handleOnboarding}
-          className="mt-12 bg-clay hover:bg-clay/90 text-bone rounded-full px-10 py-3.5 font-sans font-semibold shadow-md active:scale-[0.98] transition-all"
+          className="mc-btn-primary mt-12 px-10 py-3.5 shadow-md active:scale-[0.98]"
         >
           Get started
         </button>
@@ -294,128 +308,160 @@ export default function Dashboard() {
     return "Good evening";
   };
 
+  // Hero = most recently active space; the grid shows the next 6 unless
+  // the user has expanded to all. getFoldersForDashboard already returns
+  // folders sorted by updatedAt descending.
+  const hero = folders[0] || null;
+  const gridSpaces = showAllSpaces ? folders.slice(1) : folders.slice(1, 7);
+  const hasMoreSpaces = folders.length > 7;
+
   const capsuleExpanded = capsuleState !== "collapsed";
   const capsuleRadius = capsuleHeight > 56 ? "22px" : "9999px";
 
   return (
-    <div className="flex min-h-screen bg-bone" style={{ background: "var(--bg)" }}>
+    <div className="flex min-h-screen" style={{ background: "var(--bg-primary)" }}>
       <Sidebar />
 
-      <div className="relative min-h-screen flex-1 px-5 pt-8 pb-32 select-none lg:pl-5 pl-14">
+      <div className="relative min-h-screen flex-1 select-none px-5 pt-6 pb-40 lg:px-8 lg:pt-8 lg:pb-32">
         <header className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <h1 className="font-serif text-ink text-3xl font-bold">{getGreeting()}</h1>
-            <p className="font-sans text-warm-gray text-xs font-semibold uppercase tracking-wider mt-1">
+            <h1
+              className="mc-display text-[28px] lg:text-[32px]"
+              style={{ color: "var(--text-strong)" }}
+            >
+              {getGreeting()}
+            </h1>
+            <p
+              className="mt-1 text-[11px] font-medium uppercase tracking-[0.08em]"
+              style={{ color: "var(--text-dim)" }}
+            >
               Your spaces
             </p>
             {syncMessage && (
-              <p className="font-sans text-warm-gray text-xs mt-2">{syncMessage}</p>
+              <p className="mt-2 text-[12px]" style={{ color: "var(--text-dim)" }}>
+                {syncMessage}
+              </p>
             )}
           </div>
-          <button
-            onClick={handleRetrySync}
-            className="font-sans text-xs font-semibold text-pine hover:text-ink transition-colors"
-          >
+          <button onClick={handleRetrySync} className="mc-btn-secondary">
             Sync
           </button>
         </header>
 
-        <div className="grid grid-cols-2 gap-3 mt-6">
-          {folders.map((folder, idx) => {
-            const noteCount = noteCounts[folder.id] || 0;
+        {/* ---------------------------- HERO SPACE ---------------------------- */}
+        {hero && (
+          <Link
+            href={`/folder/${hero.id}`}
+            className="stagger-item folder-card relative block overflow-hidden p-5"
+            style={{
+              minHeight: "160px",
+              backgroundColor: "var(--dark-surface)",
+              borderRadius: "var(--radius-card)",
+            }}
+          >
+            <div
+              className="pointer-events-none absolute top-0 right-0 h-3/5 w-3/5"
+              style={{
+                background:
+                  "radial-gradient(circle at top right, rgba(122, 142, 93, 0.15), transparent 70%)",
+              }}
+            />
+            <h2 className="mc-display relative z-10 text-[28px] text-white">
+              {hero.name}
+            </h2>
+            <p className="relative z-10 mt-1 text-[13px] text-white/60">
+              {(noteCounts[hero.id] || 0)}{" "}
+              {(noteCounts[hero.id] || 0) === 1 ? "note" : "notes"}
+            </p>
+            <div className="relative z-10 mt-6 text-[11px] uppercase tracking-widest text-white/50">
+              Last active {getRelativeTimeString(hero.updatedAt)}
+            </div>
+          </Link>
+        )}
 
-            // Each card delayed by 40ms after the previous one. Hero card
-            // is index 0 (first), then medium cards, then small cards — the
-            // folders array is already ordered that way by getFoldersForDashboard.
-            const staggerDelay = `${idx * 40}ms`;
-            // stagger-item: opacity 0 → 1 with rise, animation-delay set inline.
-            // folder-card: hover lift + active press (see globals.css).
-            const cardClassName = "stagger-item folder-card";
-            const cardStyle = { animationDelay: staggerDelay };
-
-            if (folder.size === "hero") {
+        {/* ---------------------------- SPACES GRID --------------------------- */}
+        {gridSpaces.length > 0 && (
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            {gridSpaces.map((folder, idx) => {
+              const noteCount = noteCounts[folder.id] || 0;
               return (
                 <Link
                   key={folder.id}
                   href={`/folder/${folder.id}`}
-                  className={`col-span-2 relative overflow-hidden rounded-2xl p-5 block ${cardClassName}`}
-                  style={{ ...cardStyle, backgroundColor: "#1C1912" }}
+                  className="stagger-item folder-card mc-card block"
+                  style={{ animationDelay: `${idx * 40}ms`, padding: "20px" }}
                 >
-                  <div
-                    className="absolute top-0 right-0 w-3/5 h-3/5 pointer-events-none"
-                    style={{
-                      background: "radial-gradient(circle at top right, rgba(196, 87, 31, 0.18), transparent 70%)",
-                    }}
-                  />
-                  <h2 className="font-serif text-bone text-2xl font-semibold relative z-10">
-                    {folder.name}
-                  </h2>
-                  <p className="font-sans text-warm-gray-light text-sm mt-1 relative z-10">
+                  <h2 className="mc-card-title">{folder.name}</h2>
+                  <p className="mt-1 text-[11px]" style={{ color: "var(--text-dim)" }}>
                     {noteCount} {noteCount === 1 ? "note" : "notes"}
-                  </p>
-                  <div className="font-sans text-warm-gray text-xs mt-6 relative z-10">
-                    Last active {getRelativeTimeString(folder.updatedAt)}
-                  </div>
-                </Link>
-              );
-            }
-
-            if (folder.size === "med") {
-              return (
-                <Link
-                  key={folder.id}
-                  href={`/folder/${folder.id}`}
-                  className={`rounded-2xl p-4 bg-sage block ${cardClassName}`}
-                  style={cardStyle}
-                >
-                  <h2 className="font-serif text-ink text-lg font-bold">{folder.name}</h2>
-                  <p className="font-sans text-warm-gray-dark text-sm mt-1">
-                    {noteCount} {noteCount === 1 ? "note" : "notes"}
+                    {folder.updatedAt ? ` · ${getRelativeTimeString(folder.updatedAt)}` : ""}
                   </p>
                 </Link>
               );
-            }
+            })}
+          </div>
+        )}
 
-            if (folder.size === "tan") {
-              return (
-                <Link
-                  key={folder.id}
-                  href={`/folder/${folder.id}`}
-                  className={`rounded-2xl p-4 bg-tan block ${cardClassName}`}
-                  style={cardStyle}
+        {hasMoreSpaces && !showAllSpaces && (
+          <button
+            type="button"
+            onClick={() => setShowAllSpaces(true)}
+            className="mt-4 text-[12px]"
+            style={{ color: "var(--accent-green)" }}
+          >
+            View all spaces &rarr;
+          </button>
+        )}
+
+        {/* ---------------------------- RECENT NOTES -------------------------- */}
+        {recentNotes.length > 0 && (
+          <section className="mt-10">
+            <h2
+              className="text-[11px] uppercase tracking-widest"
+              style={{ color: "var(--text-dim)" }}
+            >
+              Recent
+            </h2>
+            <div className="mt-3">
+              {recentNotes.map((note) => (
+                <button
+                  key={note.id}
+                  type="button"
+                  onClick={() =>
+                    router.push(`/folder/${note.folderId}?note=${note.id}`)
+                  }
+                  className="flex w-full items-center justify-between gap-4 py-3 text-left"
+                  style={{ borderBottom: "1px solid var(--border-1)" }}
                 >
-                  <h2 className="font-serif text-ink text-lg font-bold">{folder.name}</h2>
-                  <p className="font-sans text-warm-gray-dark text-sm mt-1">
-                    {noteCount} {noteCount === 1 ? "note" : "notes"}
-                  </p>
-                </Link>
-              );
-            }
-
-            return (
-              <Link
-                key={folder.id}
-                href={`/folder/${folder.id}`}
-                className={`rounded-2xl p-4 bg-bone border border-warm-gray-light/30 block ${cardClassName}`}
-                style={cardStyle}
-              >
-                <h2 className="font-serif text-ink text-base font-bold">{folder.name}</h2>
-                <p className="font-sans text-warm-gray text-sm mt-1">
-                  {noteCount} {noteCount === 1 ? "note" : "notes"}
-                </p>
-              </Link>
-            );
-          })}
-        </div>
+                  <span
+                    className="min-w-0 flex-1 truncate text-[14px]"
+                    style={{ color: "var(--text-strong)" }}
+                  >
+                    {note.title || "Untitled"}
+                  </span>
+                  <span
+                    className="shrink-0 text-[11px]"
+                    style={{ color: "var(--text-dim)" }}
+                  >
+                    {note.folderName} &middot; {getRelativeTimeString(note.updatedAt)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
         {capsuleState === "options" && (
           <div
-            className="fixed inset-0 bg-ink/30 z-40 transition-opacity duration-200"
+            className="fixed inset-0 z-40 bg-black/30 transition-opacity duration-200"
             onClick={() => setCapsuleState("input")}
           />
         )}
 
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center lg:left-[calc(50%+120px)]">
+        {/* Desktop capture pill. On mobile the sage FAB in the nav shell is
+            the capture affordance (matching the two mockups), so this is
+            hidden below lg to avoid two competing capture controls. */}
+        <div className="fixed bottom-6 left-1/2 z-50 hidden -translate-x-1/2 flex-col items-center lg:left-[calc(50%+140px)] lg:flex">
           {capsuleState === "options" && (
             <div className="flex flex-col gap-2 items-center mb-3">
               {(() => {
@@ -429,7 +475,7 @@ export default function Dashboard() {
                       key="ai-organize"
                       onClick={() => handleOptionSelect("ai-organize")}
                       disabled={apiLoading}
-                      className="option-item bg-ink text-bone font-sans text-sm font-semibold px-6 py-3 rounded-full cursor-pointer hover:bg-ink/90 active:scale-[0.97] transition-all whitespace-nowrap shadow-md disabled:opacity-50"
+                      className="option-item mc-btn-primary whitespace-nowrap px-6 py-3 shadow-md disabled:opacity-50"
                       style={{ animationDelay: `${idx++ * 30}ms` }}
                     >
                       {apiLoading ? "Organizing with AI..." : "Organize with AI"}
@@ -441,7 +487,7 @@ export default function Dashboard() {
                     key="new-note"
                     onClick={() => handleOptionSelect("new-note")}
                     disabled={!inputText.trim()}
-                    className="option-item bg-ink text-bone font-sans text-sm font-semibold px-6 py-3 rounded-full cursor-pointer hover:bg-ink/90 active:scale-[0.97] transition-all whitespace-nowrap shadow-md disabled:opacity-50"
+                    className="option-item mc-btn-primary whitespace-nowrap px-6 py-3 shadow-md disabled:opacity-50"
                     style={{ animationDelay: `${idx++ * 30}ms` }}
                   >
                     New note
@@ -451,7 +497,7 @@ export default function Dashboard() {
                   <button
                     key="second-brain"
                     onClick={() => handleOptionSelect("second-brain")}
-                    className="option-item bg-ink text-bone font-sans text-sm font-semibold px-6 py-3 rounded-full cursor-pointer hover:bg-ink/90 active:scale-[0.97] transition-all whitespace-nowrap shadow-md"
+                    className="option-item mc-btn-secondary whitespace-nowrap px-6 py-3 shadow-md"
                     style={{ animationDelay: `${idx++ * 30}ms` }}
                   >
                     Second brain
@@ -465,18 +511,21 @@ export default function Dashboard() {
           {!capsuleExpanded && (
             <button
               onClick={() => setCapsuleState("input")}
-              className="w-16 h-9 bg-ink hover:bg-ink/90 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-[0.95]"
+              className="flex h-9 w-16 items-center justify-center rounded-full border transition-all active:scale-[0.95]" style={{ background: "var(--card-bg)", borderColor: "var(--border-1)", boxShadow: "var(--shadow-capture)" }}
             >
-              <div className="w-5 h-0.5 bg-warm-gray-light rounded-full" />
+              <div className="h-0.5 w-5 rounded-full" style={{ background: "var(--text-dim-2)" }} />
             </button>
           )}
 
           {capsuleExpanded && (
             <div
-              className="bg-ink flex items-end gap-2 px-4 py-2 shadow-lg animate-expand-bounce"
+              className="flex items-end gap-2 border px-4 py-2 animate-expand-bounce"
               style={{
                 width: "min(90vw, 400px)",
-                minHeight: "48px",
+                minHeight: "56px",
+                background: "var(--card-bg)",
+                borderColor: "var(--border-1)",
+                boxShadow: "var(--shadow-capture)",
                 maxHeight: "45vh",
                 borderRadius: capsuleRadius,
                 transition: "border-radius 200ms ease, height 200ms ease, max-height 200ms ease",
@@ -488,8 +537,8 @@ export default function Dashboard() {
                 onChange={(e) => setInputText(e.target.value)}
                 placeholder="Dump your thoughts..."
                 rows={1}
-                className="bg-transparent text-bone font-sans text-sm placeholder-warm-gray outline-none flex-1 border-none resize-none leading-relaxed py-1 max-h-[45vh] overflow-y-auto"
-                style={{ height: `${capsuleHeight}px` }}
+                className="themed-placeholder max-h-[45vh] flex-1 resize-none overflow-y-auto border-none bg-transparent py-1 text-[14px] leading-relaxed outline-none"
+                style={{ height: `${capsuleHeight}px`, color: "var(--text-strong)" }}
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey && inputText.trim()) {
@@ -500,9 +549,9 @@ export default function Dashboard() {
               />
               <button
                 onClick={() => setCapsuleState("options")}
-                className="w-8 h-8 rounded-full bg-clay hover:bg-clay/90 flex items-center justify-center shrink-0 mb-0.5 transition-transform active:scale-[0.9]"
+                className="mc-fab mb-0.5 h-9 w-9 shrink-0 transition-transform active:scale-[0.9]" style={{ boxShadow: "none" }}
               >
-                <span className="text-bone font-bold text-lg select-none">→</span>
+                <ArrowUp size={18} strokeWidth={1.8} />
               </button>
             </div>
           )}

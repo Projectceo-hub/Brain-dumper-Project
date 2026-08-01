@@ -22,7 +22,8 @@ import {
   saveEntities,
   getEntitiesForNoteTree,
   getEntitiesByNames,
-  updateNote
+  updateNote,
+  getAllNoteLinks
 } from "@/lib/db";
 
 const ENTITY_ICONS = {
@@ -49,11 +50,11 @@ function EntityNode({ data }) {
         }}
       />
       <div
-        className="flex items-center justify-center shadow-md cursor-pointer hover:scale-110 transition-transform border-2 border-clay"
+        className="flex cursor-pointer items-center justify-center shadow-md transition-transform hover:scale-110 border-2 border-[#7A8E5D]"
         style={{
           width: 36,
           height: 36,
-          backgroundColor: "#C4571F22",
+          backgroundColor: "rgba(122, 142, 93, 0.16)",
           transform: "rotate(45deg)",
           borderRadius: 4,
         }}
@@ -66,7 +67,7 @@ function EntityNode({ data }) {
         </span>
       </div>
       {data.label && (
-        <span className="mt-2 whitespace-nowrap text-[9px] font-sans text-clay pointer-events-none max-w-[80px] truncate">
+        <span className="pointer-events-none mt-2 max-w-[80px] truncate whitespace-nowrap text-[9px] text-[#A8BC8B]">
           {data.label}
         </span>
       )}
@@ -109,12 +110,12 @@ function DotNode({ data }) {
         style={{
           width: data.dotSize || 10,
           height: data.dotSize || 10,
-          backgroundColor: data.color || "#8A8071",
+          backgroundColor: data.color || "#8B877E",
         }}
       />
       {data.label && (
         <span
-          className="mt-1 whitespace-nowrap text-[9px] font-sans text-warm-gray pointer-events-none"
+          className="pointer-events-none mt-1 whitespace-nowrap text-[9px] text-[#8B877E]"
           style={{ fontFamily: "Inter, sans-serif" }}
         >
           {data.label}
@@ -140,12 +141,12 @@ function DotNode({ data }) {
 // 2. Custom Pill Node (for NotebookLM Mindmap View)
 function PillNode({ data }) {
   return (
-    <div className="bg-ink border border-graph-line rounded-lg px-4 py-2 shadow-lg relative min-w-[120px] max-w-[200px] text-center flex items-center justify-center cursor-pointer hover:border-clay transition-colors">
+    <div className="relative flex min-w-[120px] max-w-[200px] cursor-pointer items-center justify-center rounded-[20px] border border-[#2E2E2E] bg-[#1E1E1E] px-4 py-2 text-center shadow-lg transition-colors hover:border-[#7A8E5D]">
       <Handle
         type="target"
         position={Position.Left}
         style={{
-          background: "#C4571F",
+          background: "#7A8E5D",
           border: "none",
           width: 6,
           height: 6,
@@ -153,14 +154,14 @@ function PillNode({ data }) {
           left: "-3px",
         }}
       />
-      <span className="text-bone font-sans text-xs font-semibold leading-tight select-none">
+      <span className="select-none text-[12px] font-medium leading-tight text-white">
         {data.label}
       </span>
       <Handle
         type="source"
         position={Position.Right}
         style={{
-          background: "#3D6B5C",
+          background: "#A8BC8B",
           border: "none",
           width: 6,
           height: 6,
@@ -391,7 +392,7 @@ function GraphContent() {
                 source: parentId,
                 target: currentId,
                 type: "bezier",
-                style: { stroke: "#3A352C", strokeWidth: 1.5 },
+                style: { stroke: "#2E2E2E", strokeWidth: 1.5 },
               });
             }
 
@@ -474,7 +475,7 @@ function GraphContent() {
             const fx = centerX + ring1Radius * Math.cos(angle);
             const fy = centerY + ring1Radius * Math.sin(angle);
 
-            const color = folderIdx % 2 === 0 ? "#C4571F" : "#3D6B5C";
+            const color = folderIdx % 2 === 0 ? "#7A8E5D" : "#A8BC8B";
 
             newNodes.push({
               id: `folder-${folder.id}`,
@@ -492,7 +493,7 @@ function GraphContent() {
               source: "you",
               target: `folder-${folder.id}`,
               type: "straight",
-              style: { stroke: "#3A352C", strokeWidth: 1 },
+              style: { stroke: "#2E2E2E", strokeWidth: 1 },
             });
 
             // Ring 2 (notes around their respective folders)
@@ -523,10 +524,45 @@ function GraphContent() {
                 source: `folder-${folder.id}`,
                 target: `note-${note.id}`,
                 type: "straight",
-                style: { stroke: "#3A352C", strokeWidth: 1 },
+                style: { stroke: "#2E2E2E", strokeWidth: 1 },
               });
             });
           });
+
+          // Phase 7A: note <-> note link edges from note_links.
+          const nodeIds = new Set(newNodes.map((n) => n.id));
+          const seenLinkEdgeIds = new Set();
+          let noteLinks = [];
+          try {
+            noteLinks = await getAllNoteLinks();
+          } catch (err) {
+            console.warn("Failed to load note links for graph:", err);
+          }
+
+          for (const link of noteLinks || []) {
+            if (!link || !link.source_note_id || !link.target_note_id) continue;
+
+            const source = `note-${link.source_note_id}`;
+            const target = `note-${link.target_note_id}`;
+
+            // Skip silently when either endpoint isn't on screen: the note
+            // was deleted after the link was written, lives outside this
+            // user's set, or simply isn't rendered.
+            if (!nodeIds.has(source) || !nodeIds.has(target)) continue;
+
+            const id = `edge-${link.source_note_id}-${link.target_note_id}`;
+            if (seenLinkEdgeIds.has(id)) continue;
+            seenLinkEdgeIds.add(id);
+
+            newEdges.push({
+              id,
+              source,
+              target,
+              type: "default",
+              animated: false,
+              style: { stroke: "#7A8E5D", strokeWidth: 1.5, opacity: 0.6 },
+            });
+          }
 
           setNodes(newNodes);
           setEdges(newEdges);
@@ -681,7 +717,7 @@ function GraphContent() {
   };
 
   return (
-    <div className="w-screen h-screen bg-graph-bg relative select-none" style={{ background: "var(--bg)" }}>
+    <div className="relative h-screen w-screen select-none" style={{ background: "var(--dark-surface)" }}>
       {/* Header Overlay */}
       <header className="fixed top-0 left-0 right-0 z-10 flex items-center gap-3 px-5 pt-5 pointer-events-none">
         <button
@@ -698,24 +734,24 @@ function GraphContent() {
               router.push("/");
             }
           }}
-          className="w-8 h-8 rounded-full bg-ink/75 flex items-center justify-center cursor-pointer text-bone text-base border border-graph-line/40 hover:bg-ink pointer-events-auto transition-colors"
+          className="pointer-events-auto flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-[#1E1E1E] text-white transition-colors hover:bg-[#2A2A2A]"
         >
           ←
         </button>
-        <div className="flex flex-col pointer-events-auto bg-graph-bg/50 px-2 py-0.5 rounded">
-          <h1 className="font-serif text-bone text-lg font-bold">
+        <div className="pointer-events-auto flex flex-col rounded-[12px] px-2 py-0.5">
+          <h1 className="mc-display text-[20px] text-white">
             {noteId ? "Note map" : "Second brain"}
           </h1>
           {noteId && noteTitle && (
-            <p className="text-[11px] font-sans text-warm-gray">{noteTitle}</p>
+            <p className="text-[11px] text-[#8B877E]">{noteTitle}</p>
           )}
         </div>
       </header>
 
       {/* Main Graph Canvas */}
       {loading || aiMapping ? (
-        <div className="w-full h-full flex flex-col items-center justify-center bg-graph-bg gap-3" style={{ background: "var(--bg)" }}>
-          <p className="font-sans text-warm-gray animate-pulse">
+        <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ background: "var(--dark-surface)" }}>
+          <p className="animate-pulse text-[14px] text-[#8B877E]">
             {aiMapping
               ? "AI is mapping this note into a structured mindmap..."
               : "Loading visual brain..."}
@@ -739,18 +775,18 @@ function GraphContent() {
             minZoom={0.1}
             maxZoom={2.5}
             proOptions={{ hideAttribution: true }}
-            style={{ background: "#14110D" }}
+            style={{ background: "var(--dark-surface)" }}
           >
-            <Background variant={BackgroundVariant.Dots} color="#3A352C" size={1} gap={24} />
+            <Background variant={BackgroundVariant.Dots} color="#2E2E2E" size={1} gap={24} />
           </ReactFlow>
         </div>
       )}
 
       {/* Slide-out Sidebar Panel */}
       {(selectedNote || selectedEntity) && (
-        <div className="fixed top-0 right-0 h-full w-[350px] bg-ink border-l border-graph-line z-30 shadow-2xl p-6 text-bone flex flex-col transition-all duration-300 animate-slide-in-right">
+        <div className="animate-slide-in-right fixed top-0 right-0 z-30 flex h-full w-[var(--inspector-w)] flex-col border-l border-[#2E2E2E] bg-[#1E1E1E] p-6 text-white shadow-2xl transition-all duration-300">
           <div className="flex items-center justify-between">
-            <span className="text-warm-gray-light font-sans text-xs uppercase tracking-widest font-semibold">
+            <span className="mc-panel-label">
               {selectedEntity ? "Entity" : "Content Details"}
             </span>
             <button
@@ -758,7 +794,7 @@ function GraphContent() {
                 setSelectedNote(null);
                 setSelectedEntity(null);
               }}
-              className="text-warm-gray hover:text-bone text-2xl font-sans cursor-pointer focus:outline-none"
+              className="cursor-pointer text-2xl text-[#8B877E] transition-colors hover:text-white focus:outline-none"
             >
               &times;
             </button>
@@ -775,10 +811,10 @@ function GraphContent() {
                   </span>
                 </div>
                 <div>
-                  <h2 className="font-serif text-2xl font-bold text-bone leading-tight">
+                  <h2 className="mc-display text-[24px] leading-tight text-white">
                     {selectedEntity.name}
                   </h2>
-                  <p className="font-sans text-xs text-clay capitalize mt-0.5">
+                  <p className="mt-0.5 text-[12px] capitalize text-[#A8BC8B]">
                     {selectedEntity.type}
                   </p>
                 </div>
@@ -786,12 +822,12 @@ function GraphContent() {
             </>
           ) : (
             <>
-              <h2 className="font-serif text-2xl font-bold text-bone mt-2 border-b border-graph-line pb-3 leading-tight">
+              <h2 className="mc-display mt-2 border-b border-[#2E2E2E] pb-3 text-[24px] leading-tight text-white">
                 {selectedNote.title}
               </h2>
-              <div className="font-sans text-sm text-warm-gray-light leading-relaxed mt-4 flex-1 overflow-y-auto whitespace-pre-wrap pr-1 scrollbar-thin">
+              <div className="scrollbar-thin mt-4 flex-1 overflow-y-auto whitespace-pre-wrap pr-1 text-[13.5px] leading-relaxed text-white/70">
                 {selectedNote.body || (
-                  <span className="italic text-warm-gray">No description available.</span>
+                  <span className="italic text-[#8B877E]">No description available.</span>
                 )}
               </div>
             </>
@@ -806,8 +842,8 @@ export default function GraphPage() {
   return (
     <Suspense
       fallback={
-        <div className="w-screen h-screen flex items-center justify-center bg-graph-bg" style={{ background: "var(--bg)" }}>
-          <p className="font-sans text-warm-gray animate-pulse">Loading visual brain...</p>
+        <div className="flex h-screen w-screen items-center justify-center" style={{ background: "var(--dark-surface)" }}>
+          <p className="animate-pulse text-[14px] text-[#8B877E]">Loading visual brain…</p>
         </div>
       }
     >

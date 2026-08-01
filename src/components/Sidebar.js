@@ -2,24 +2,57 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { getAllFolders, getNotesInFolder, createFolder } from "@/lib/db";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  Home,
+  Layers,
+  Network,
+  MessageCircle,
+  User,
+  Plus,
+  Download,
+  Settings as SettingsIcon,
+  LogOut,
+  ChevronDown,
+  Loader2,
+} from "lucide-react";
+import {
+  getAllFolders,
+  getNotesInFolder,
+  createFolder,
+  createNote,
+  getOrCreateQuickNotesFolder,
+} from "@/lib/db";
 import { createClient } from "@/lib/supabase/client";
+
+// Phase 7B navigation shell.
+//
+// Presentation follows the approved mockups:
+//   - desktop: 280px #121212 sidebar, full-round nav pills, green
+//     "New Thought" button, Spaces section, footer utilities
+//   - mobile:  72px translucent bottom nav (Home/Spaces/Graph/Chat/You)
+//     plus the sage-green floating capture button
+//
+// All data behaviour (folders, note counts, profile, online state, export,
+// new space, logout) is carried over from the pre-7B sidebar unchanged.
+
+// lucide default stroke is 2; the 7B spec calls for 1.8 everywhere.
+const ICON = { size: 18, strokeWidth: 1.8 };
+const NAV_ICON = { size: 22, strokeWidth: 1.8 };
 
 export default function Sidebar({ activeFolderId = null }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [folders, setFolders] = useState([]);
   const [noteCounts, setNoteCounts] = useState({});
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [capturing, setCapturing] = useState(false);
+  const [spacesOpen, setSpacesOpen] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
-  // Lazy initializer runs on the client only (the component only mounts in
-  // the browser because it's inside AuthGate). Reading navigator.onLine
-  // here avoids calling setState synchronously inside the effect, which
-  // would trip react-hooks/set-state-in-effect.
   const [online, setOnline] = useState(() =>
     typeof navigator !== "undefined" ? navigator.onLine : true,
   );
@@ -66,7 +99,6 @@ export default function Sidebar({ activeFolderId = null }) {
       setDisplayName(data.user?.user_metadata?.display_name || "");
     });
 
-    // Refresh display_name when settings page updates it (Part B).
     const refresh = () => {
       supabase.auth.getUser().then(({ data }) => {
         setEmail(data.user?.email || "");
@@ -81,11 +113,6 @@ export default function Sidebar({ activeFolderId = null }) {
     };
   }, []);
 
-  // Track online/offline state for the indicator (Part B6). navigator.onLine
-  // is true/false at startup (read via lazy initializer above); the
-  // online/offline window events fire when it changes. We deliberately
-  // don't read navigator inside the effect body because that triggers a
-  // cascading-render warning.
   useEffect(() => {
     const handleOnline = () => setOnline(true);
     const handleOffline = () => setOnline(false);
@@ -116,9 +143,7 @@ export default function Sidebar({ activeFolderId = null }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      const stamp = new Date()
-        .toISOString()
-        .slice(0, 10);
+      const stamp = new Date().toISOString().slice(0, 10);
       a.download = `mindcanvas-vault-${stamp}.zip`;
       document.body.appendChild(a);
       a.click();
@@ -143,6 +168,23 @@ export default function Sidebar({ activeFolderId = null }) {
     }
   };
 
+  // Floating capture button / "New Thought": drops a blank note into the
+  // Quick notes space and opens it straight in the editor.
+  const handleCapture = async () => {
+    if (capturing) return;
+    setCapturing(true);
+    try {
+      const folderId = await getOrCreateQuickNotesFolder();
+      const noteId = await createNote(folderId, "", "");
+      setMobileOpen(false);
+      router.push(`/folder/${folderId}?note=${noteId}`);
+    } catch (err) {
+      console.warn("Capture failed:", err);
+    } finally {
+      setCapturing(false);
+    }
+  };
+
   const handleLogout = async () => {
     const supabase = createClient();
     if (supabase) {
@@ -151,190 +193,262 @@ export default function Sidebar({ activeFolderId = null }) {
   };
 
   const isGraph = pathname === "/graph";
+  const isHome = pathname === "/";
+  const isSettings = pathname.startsWith("/settings");
+  const initial = (displayName || email || "M").trim().charAt(0).toUpperCase();
 
+  // ---------------------------------------------------------------- desktop
   const sidebarContent = (
-    <aside
-      className="flex h-full w-[240px] shrink-0 flex-col bg-ink text-bone"
-      style={{ backgroundColor: "var(--sidebar-bg)" }}
-    >
-      <div className="border-b border-graph-line/40 px-5 py-6">
+    <aside className="mc-sidebar h-full overflow-y-auto">
+      <div className="flex items-center gap-2.5 px-1 pb-5">
+        <div className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-white">
+          <span className="mc-display text-[15px] text-[#121212]">M</span>
+        </div>
+        <span className="text-[16px] font-medium tracking-tight text-white">
+          MindCanvas
+        </span>
+      </div>
+
+      <button
+        type="button"
+        onClick={handleCapture}
+        disabled={capturing}
+        className="mc-btn-primary w-full py-3 disabled:opacity-60"
+      >
+        {capturing ? (
+          <Loader2 {...ICON} className="animate-spin" />
+        ) : (
+          <Plus {...ICON} />
+        )}
+        New Thought
+      </button>
+
+      {!online && (
+        <p className="mt-3 flex items-center gap-1.5 text-[11px] text-white/50">
+          <span
+            aria-hidden="true"
+            className="inline-block h-1.5 w-1.5 rounded-full bg-white/50"
+          />
+          Offline — changes sync when reconnected
+        </p>
+      )}
+
+      <div className="mt-6 flex flex-col gap-1">
         <Link
           href="/"
           onClick={() => setMobileOpen(false)}
-          className="font-serif text-xl font-bold tracking-tight text-bone hover:text-clay transition-colors"
-          style={{ color: "var(--sidebar-text)" }}
+          className="mc-nav-item"
+          data-active={isHome ? "true" : "false"}
         >
-          MindCanvas
+          <Home {...ICON} />
+          Home
         </Link>
-        {/* Offline indicator (Part B6) — shows when navigator.onLine is false. */}
-        {!online && (
-          <p
-            className="mt-2 flex items-center gap-1.5 font-sans text-[11px] text-warm-gray"
-            style={{ color: "var(--sidebar-text-muted)" }}
-          >
-            <span
-              aria-hidden="true"
-              className="inline-block h-1.5 w-1.5 rounded-full bg-warm-gray"
-            />
-            Offline — changes will sync when reconnected
-          </p>
-        )}
-      </div>
-
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
-        <p
-          className="px-2 font-sans text-[10px] font-semibold uppercase tracking-widest text-warm-gray-light"
-          style={{ color: "var(--sidebar-text-muted)" }}
-        >
-          Spaces
-        </p>
-        <ul className="mt-2 flex flex-col gap-0.5">
-          {folders.map((folder) => {
-            const active = activeFolderId === folder.id;
-            const count = noteCounts[folder.id] || 0;
-return (
-                  <li key={folder.id}>
-                <Link
-                  href={`/folder/${folder.id}`}
-                  onClick={() => setMobileOpen(false)}
-                  className={`sidebar-item flex items-center justify-between rounded-lg px-3 py-2.5 font-sans text-sm transition-colors ${
-                    active
-                      ? "text-bone font-semibold"
-                      : "text-warm-gray-light hover:bg-white/5 hover:text-bone"
-                  }`}
-                  style={{ color: active ? "var(--sidebar-text)" : "var(--sidebar-text-muted)" }}
-                >
-                  {/* Active indicator: 3px clay bar on the left, slides in via the animation */}
-                  {active && (
-                    <span className="absolute left-0 top-1 bottom-1 w-[3px] bg-clay rounded-r-sm sidebar-indicator" />
-                  )}
-                  <span className="truncate">{folder.name}</span>
-                  <span
-                    className="ml-2 shrink-0 text-xs text-warm-gray"
-                    style={{ color: "var(--sidebar-text-muted)" }}
-                  >
-                    {count}
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-
-        <button
-          onClick={handleNewSpace}
-          disabled={creating}
-          className="mt-3 w-full rounded-lg px-3 py-2.5 text-left font-sans text-sm text-warm-gray-light hover:bg-white/5 hover:text-bone transition-colors disabled:opacity-50"
-          style={{ color: "var(--sidebar-text-muted)" }}
-        >
-          {creating ? "Creating..." : "+ New space"}
-        </button>
-
-        <div className="my-4 border-t border-graph-line/40" />
-
         <Link
           href="/graph"
           onClick={() => setMobileOpen(false)}
-          className={`sidebar-item flex items-center rounded-lg px-3 py-2.5 font-sans text-sm transition-colors relative ${
-            isGraph
-              ? "text-bone font-semibold"
-              : "text-warm-gray-light hover:bg-white/5 hover:text-bone"
-          }`}
-          style={{ color: isGraph ? "var(--sidebar-text)" : "var(--sidebar-text-muted)" }}
+          className="mc-nav-item"
+          data-active={isGraph ? "true" : "false"}
         >
-          {isGraph && (
-            <span className="absolute left-0 top-1 bottom-1 w-[3px] bg-clay rounded-r-sm sidebar-indicator" />
-          )}
-          Second brain
+          <Network {...ICON} />
+          Graph View
         </Link>
-      </nav>
+      </div>
 
-      <div className="border-t border-graph-line/40 px-5 py-4">
+      <div className="mt-7">
+        <button
+          type="button"
+          onClick={() => setSpacesOpen((v) => !v)}
+          className="flex w-full items-center justify-between px-3"
+        >
+          <span className="text-[11px] uppercase tracking-[0.12em] text-white/40">
+            Spaces
+          </span>
+          <ChevronDown
+            size={14}
+            strokeWidth={1.8}
+            className={`text-white/40 transition-transform ${spacesOpen ? "" : "-rotate-90"}`}
+          />
+        </button>
+
+        {spacesOpen && (
+          <div className="mt-3 flex flex-col gap-0.5">
+            {folders.map((folder) => (
+              <Link
+                key={folder.id}
+                href={`/folder/${folder.id}`}
+                onClick={() => setMobileOpen(false)}
+                className="mc-nav-item justify-between"
+                data-active={activeFolderId === folder.id ? "true" : "false"}
+              >
+                <span className="truncate">{folder.name}</span>
+                <span className="ml-2 shrink-0 text-[11px] text-white/35">
+                  {noteCounts[folder.id] || 0}
+                </span>
+              </Link>
+            ))}
+
+            <button
+              type="button"
+              onClick={handleNewSpace}
+              disabled={creating}
+              className="mc-nav-item disabled:opacity-50"
+            >
+              <Plus size={16} strokeWidth={1.8} />
+              {creating ? "Creating…" : "New space"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-auto flex flex-col gap-1 border-t border-white/10 pt-4">
+        <Link
+          href="/settings/import"
+          onClick={() => setMobileOpen(false)}
+          className="mc-nav-item"
+          data-active={pathname.startsWith("/settings/import") ? "true" : "false"}
+        >
+          <Download {...ICON} />
+          Import
+        </Link>
+        <Link
+          href="/settings"
+          onClick={() => setMobileOpen(false)}
+          className="mc-nav-item"
+          data-active={isSettings && !pathname.startsWith("/settings/import") ? "true" : "false"}
+        >
+          <SettingsIcon {...ICON} />
+          Settings
+        </Link>
         <button
           type="button"
           onClick={handleExportVault}
           disabled={exporting}
-          className="mb-3 flex w-full items-center gap-2 font-sans text-xs font-semibold text-warm-gray-light hover:text-bone transition-colors disabled:opacity-60"
-          style={{ color: "var(--sidebar-text-muted)" }}
-          title="Download all your notes as a ZIP of Markdown files"
+          className="mc-nav-item disabled:opacity-60"
         >
           {exporting ? (
-            <>
-              <span
-                aria-hidden="true"
-                className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-warm-gray-light border-t-transparent"
-                style={{ borderColor: "var(--sidebar-text-muted)" }}
-              />
-              Exporting…
-            </>
+            <Loader2 {...ICON} className="animate-spin" />
           ) : (
-            <>
-              <span aria-hidden="true" className="text-sm leading-none">
-                ↓
-              </span>
-              Export vault
-            </>
+            <Download {...ICON} />
           )}
+          {exporting ? "Exporting…" : "Export vault"}
         </button>
         {exportError && (
-          <p className="mb-2 font-sans text-[11px] text-clay">{exportError}</p>
+          <p className="px-3 text-[11px] text-[#E4A08A]">{exportError}</p>
         )}
 
-        <Link
-          href="/settings"
-          onClick={() => setMobileOpen(false)}
-          className="flex items-center gap-1.5 font-sans text-xs font-semibold text-warm-gray-light hover:text-bone transition-colors mb-2"
-          style={{ color: "var(--sidebar-text-muted)" }}
-        >
-          <span aria-hidden="true" className="text-sm leading-none">⚙</span>
-          Settings
-        </Link>
-        {(displayName || email) && (
-          <p
-            className="truncate font-sans text-xs text-warm-gray mb-2"
-            style={{ color: "var(--sidebar-text-muted)" }}
-            title={email}
+        <div className="mt-2 flex items-center gap-2.5 px-3 pt-2">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#2A2A2A] text-[12px] text-white">
+            {initial}
+          </div>
+          <span className="min-w-0 flex-1 truncate text-[12px] text-white/70" title={email}>
+            {displayName || email || "Signed in"}
+          </span>
+          <button
+            type="button"
+            onClick={handleLogout}
+            aria-label="Log out"
+            className="text-white/40 transition-colors hover:text-white"
           >
-            {displayName || email}
-          </p>
-        )}
-        <button
-          onClick={handleLogout}
-          className="font-sans text-xs font-semibold text-warm-gray-light hover:text-bone transition-colors"
-          style={{ color: "var(--sidebar-text-muted)" }}
-        >
-          Log out
-        </button>
+            <LogOut size={16} strokeWidth={1.8} />
+          </button>
+        </div>
       </div>
     </aside>
   );
 
+  // ----------------------------------------------------------------- mobile
+  const bottomNav = [
+    { key: "home", label: "Home", href: "/", Icon: Home, active: isHome },
+    {
+      key: "spaces",
+      label: "Spaces",
+      onClick: () => setMobileOpen(true),
+      Icon: Layers,
+      active: mobileOpen || pathname.startsWith("/folder"),
+    },
+    { key: "graph", label: "Graph", href: "/graph", Icon: Network, active: isGraph },
+    { key: "chat", label: "Chat", Icon: MessageCircle, active: false, disabled: true },
+    { key: "you", label: "You", href: "/settings", Icon: User, active: isSettings },
+  ];
+
   return (
     <>
-      {/* Mobile toggle */}
-      <button
-        type="button"
-        onClick={() => setMobileOpen(true)}
-        className="fixed left-4 top-4 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-ink text-bone shadow-md lg:hidden"
-        style={{ backgroundColor: "var(--sidebar-bg)", color: "var(--sidebar-text)" }}
-        aria-label="Open menu"
-      >
-        <span className="text-lg leading-none">☰</span>
-      </button>
-
       {/* Desktop sidebar */}
       <div className="hidden lg:block">{sidebarContent}</div>
 
-      {/* Mobile overlay sidebar */}
+      {/* Mobile: Spaces drawer */}
       {mobileOpen && (
         <>
           <div
-            className="fixed inset-0 z-50 bg-ink/50 lg:hidden"
+            className="fixed inset-0 z-50 bg-black/50 lg:hidden"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="fixed inset-y-0 left-0 z-50 lg:hidden">{sidebarContent}</div>
+          <div className="fixed inset-y-0 left-0 z-50 lg:hidden">
+            {sidebarContent}
+          </div>
         </>
       )}
+
+      {/* Mobile: floating capture button, sits above the bottom nav */}
+      <button
+        type="button"
+        onClick={handleCapture}
+        disabled={capturing}
+        aria-label="New thought"
+        className="mc-fab fixed bottom-[88px] right-5 z-40 disabled:opacity-60 lg:hidden"
+      >
+        {capturing ? (
+          <Loader2 size={24} strokeWidth={1.8} className="animate-spin" />
+        ) : (
+          <Plus size={24} strokeWidth={1.8} />
+        )}
+      </button>
+
+      {/* Mobile: bottom nav */}
+      <nav className="mc-bottomnav fixed inset-x-0 bottom-0 z-40 flex items-center justify-around px-2 lg:hidden">
+        {bottomNav.map(({ key, label, href, onClick, Icon, active, disabled }) => {
+          const inner = (
+            <>
+              <Icon {...NAV_ICON} />
+              <span>{label}</span>
+              <span
+                className={`h-1 w-1 rounded-full ${active ? "bg-[#7A8E5D]" : "bg-transparent"}`}
+              />
+            </>
+          );
+          if (disabled) {
+            return (
+              <span
+                key={key}
+                aria-disabled="true"
+                className="mc-bottomnav-item opacity-40"
+              >
+                {inner}
+              </span>
+            );
+          }
+          return href ? (
+            <Link
+              key={key}
+              href={href}
+              className="mc-bottomnav-item"
+              data-active={active ? "true" : "false"}
+            >
+              {inner}
+            </Link>
+          ) : (
+            <button
+              key={key}
+              type="button"
+              onClick={onClick}
+              className="mc-bottomnav-item"
+              data-active={active ? "true" : "false"}
+            >
+              {inner}
+            </button>
+          );
+        })}
+      </nav>
     </>
   );
 }

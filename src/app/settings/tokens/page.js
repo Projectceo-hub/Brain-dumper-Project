@@ -142,7 +142,7 @@ export default function TokensSettingsPage() {
     <div className="flex min-h-screen bg-bone" style={{ background: "var(--bg)" }}>
       <Sidebar />
 
-      <div className="relative min-h-screen flex-1 px-5 pt-6 pb-8 lg:pl-5 pl-14" style={{ background: "var(--bg)" }}>
+      <div className="relative min-h-screen flex-1 px-5 pt-6 pb-40 lg:px-8 lg:pb-8" style={{ background: "var(--bg)" }}>
         <div
           className="flex items-center gap-1 transition-colors cursor-pointer text-sm font-sans"
           style={{ color: "var(--text-muted)" }}
@@ -160,7 +160,7 @@ export default function TokensSettingsPage() {
             SETTINGS
           </p>
           <h1
-            className="font-serif text-3xl font-bold mt-1"
+            className="mc-display text-[30px] mt-1"
             style={{ color: "var(--text-primary)" }}
           >
             API tokens
@@ -177,7 +177,7 @@ export default function TokensSettingsPage() {
 
         {error && (
           <p
-            className="mt-4 font-sans text-sm rounded-lg px-3 py-2"
+            className="mt-4 font-sans text-sm rounded-[14px] px-3 py-2"
             style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 10%, transparent)" }}
           >
             {error}
@@ -186,13 +186,13 @@ export default function TokensSettingsPage() {
 
         <section className="mt-8 max-w-3xl">
           <div className="rounded-2xl p-5" style={{ background: "var(--surface)" }}>
-            <h2 className="font-serif text-xl font-bold" style={{ color: "var(--text-primary)" }}>MCP endpoint</h2>
+            <h2 className="mc-display text-[20px]" style={{ color: "var(--text-primary)" }}>MCP endpoint</h2>
             <p className="font-sans text-sm mt-1 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
               This is the URL your MCP client will POST to. Use it as-is.
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <code
-                className="themed-placeholder flex-1 min-w-[260px] border rounded-lg px-3 py-2 font-sans text-xs font-mono break-all"
+                className="themed-placeholder flex-1 min-w-[260px] border rounded-[14px] px-3 py-2 font-sans text-xs font-mono break-all"
                 style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--text-primary)" }}
               >
                 {deployUrl || `https://YOUR_DEPLOY_URL${MCP_ENDPOINT_PATH}`}
@@ -208,7 +208,7 @@ export default function TokensSettingsPage() {
           </div>
 
           <div className="rounded-2xl p-5 mt-4" style={{ background: "var(--surface)" }}>
-            <h2 className="font-serif text-xl font-bold" style={{ color: "var(--text-primary)" }}>Generate a token</h2>
+            <h2 className="mc-display text-[20px]" style={{ color: "var(--text-primary)" }}>Generate a token</h2>
             <p className="font-sans text-sm mt-1 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
               The raw token is shown exactly <span className="font-semibold">once</span> after
               generation. Copy it now — MindCanvas only stores a hash, so it can never be
@@ -225,7 +225,7 @@ export default function TokensSettingsPage() {
                   onChange={(e) => setLabel(e.target.value)}
                   placeholder="e.g. Claude Desktop"
                   maxLength={60}
-                  className="themed-placeholder border rounded-lg px-3 py-2.5 font-sans text-sm outline-none focus:border-clay transition-colors"
+                  className="themed-placeholder border rounded-[14px] px-3 py-2.5 font-sans text-sm outline-none focus:border-clay transition-colors"
                   style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--text-primary)" }}
                 />
               </label>
@@ -252,7 +252,7 @@ export default function TokensSettingsPage() {
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <code
-                    className="themed-placeholder flex-1 min-w-[260px] border rounded-lg px-3 py-2 font-sans text-xs font-mono break-all"
+                    className="themed-placeholder flex-1 min-w-[260px] border rounded-[14px] px-3 py-2 font-sans text-xs font-mono break-all"
                     style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--text-primary)" }}
                   >
                     {newlyCreated.token}
@@ -278,7 +278,7 @@ export default function TokensSettingsPage() {
           </div>
 
           <div className="rounded-2xl p-5 mt-4" style={{ background: "var(--surface)" }}>
-            <h2 className="font-serif text-xl font-bold" style={{ color: "var(--text-primary)" }}>Existing tokens</h2>
+            <h2 className="mc-display text-[20px]" style={{ color: "var(--text-primary)" }}>Existing tokens</h2>
             {loading ? (
               <p className="font-sans mt-3 animate-pulse" style={{ color: "var(--text-muted)" }}>Loading...</p>
             ) : tokens.length === 0 ? (
@@ -326,7 +326,7 @@ export default function TokensSettingsPage() {
           </div>
 
           <div className="rounded-2xl p-5 mt-4" style={{ background: "var(--surface)" }}>
-            <h2 className="font-serif text-xl font-bold" style={{ color: "var(--text-primary)" }}>Connecting Claude Desktop</h2>
+            <h2 className="mc-display text-[20px]" style={{ color: "var(--text-primary)" }}>Connecting Claude Desktop</h2>
             <p className="font-sans text-sm mt-1 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
               Open your <code className="px-1.5 py-0.5 rounded text-xs" style={{ background: "var(--bg)", color: "var(--text-primary)" }}>claude_desktop_config.json</code> file
               and add MindCanvas as an MCP server, then restart Claude Desktop. The file lives at:
@@ -336,7 +336,7 @@ export default function TokensSettingsPage() {
               <li>Windows: <code className="font-mono">%AppData%\Claude\claude_desktop_config.json</code></li>
             </ul>
             <pre
-              className="mt-3 border rounded-lg p-3 font-mono text-xs overflow-x-auto whitespace-pre"
+              className="mt-3 border rounded-[14px] p-3 font-mono text-xs overflow-x-auto whitespace-pre"
               style={{ background: "var(--bg)", borderColor: "var(--border)", color: "var(--text-primary)" }}
             >
               {CLAUDE_DESKTOP_CONFIG_SAMPLE}
