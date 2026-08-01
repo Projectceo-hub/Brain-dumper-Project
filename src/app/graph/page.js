@@ -12,6 +12,7 @@ import {
   Position
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { X } from "lucide-react";
 
 import {
   getNoteById,
@@ -88,8 +89,13 @@ function EntityNode({ data }) {
   );
 }
 
-// 1. Custom Flat Dot Node (for Global Obsidian View)
+// 1. Node for the global "second brain" view.
+//
+// Phase 7B: notes render as white rounded cards carrying their title and
+// space name (per the approved reference). Folder rings and the centre
+// node keep the compact dot form so the hierarchy still reads.
 function DotNode({ data }) {
+  const isNoteCard = data.variant === "card";
   return (
     <div className="flex flex-col items-center select-none relative">
       <Handle
@@ -105,15 +111,24 @@ function DotNode({ data }) {
           transform: "translate(-50%, -50%)",
         }}
       />
-      <div
-        className="rounded-full shadow-sm cursor-pointer hover:scale-110 transition-transform"
-        style={{
-          width: data.dotSize || 10,
-          height: data.dotSize || 10,
-          backgroundColor: data.color || "#8B877E",
-        }}
-      />
-      {data.label && (
+      {isNoteCard ? (
+        <div className="mc-graph-node cursor-pointer transition-transform hover:scale-[1.03]">
+          <div className="mc-graph-node-title truncate">
+            {data.title || "Untitled"}
+          </div>
+          <div className="mc-graph-node-space truncate">{data.spaceName}</div>
+        </div>
+      ) : (
+        <div
+          className="rounded-full shadow-sm cursor-pointer hover:scale-110 transition-transform"
+          style={{
+            width: data.dotSize || 10,
+            height: data.dotSize || 10,
+            backgroundColor: data.color || "#8B877E",
+          }}
+        />
+      )}
+      {!isNoteCard && data.label && (
         <span
           className="pointer-events-none mt-1 whitespace-nowrap text-[9px] text-[#8B877E]"
           style={{ fontFamily: "Inter, sans-serif" }}
@@ -467,7 +482,9 @@ function GraphContent() {
           });
 
           // Ring 1 (folders)
-          const ring1Radius = 200;
+          // Wider rings than the pre-7B dot layout: note nodes are now
+          // ~150px cards rather than 9px dots, so they need real spacing.
+          const ring1Radius = 520;
           const folderCount = foldersList.length;
 
           foldersList.forEach((folder, folderIdx) => {
@@ -499,7 +516,7 @@ function GraphContent() {
             // Ring 2 (notes around their respective folders)
             const folderNotes = notesList.filter((n) => n.folderId === folder.id);
             const noteCount = folderNotes.length;
-            const ring2Radius = 80;
+            const ring2Radius = 230;
 
             folderNotes.forEach((note, noteIdx) => {
               const noteAngle = (noteIdx / noteCount) * 2 * Math.PI;
@@ -511,10 +528,13 @@ function GraphContent() {
                 type: "dot",
                 position: { x: nx, y: ny },
                 data: {
+                  variant: "card",
                   label: note.title || "Untitled",
                   color: color,
                   dotSize: 9,
                   title: note.title || "Untitled",
+                  spaceName: folder.name,
+                  folderId: folder.id,
                   body: note.body || "",
                 },
               });
@@ -708,9 +728,32 @@ function GraphContent() {
       return;
     }
     if (node.data && (node.data.title || node.data.body)) {
+      // Resolve the note's @mention-linked neighbours from the edges that
+      // Phase 7A already built, so the preview can list them as chips.
+      // Reads existing state only — no new queries.
+      const nodeId = node.id;
+      const linkedIds = edges
+        .filter((e) => e.id.startsWith("edge-") && !e.id.startsWith("edge-you"))
+        .filter((e) => e.source === nodeId || e.target === nodeId)
+        .map((e) => (e.source === nodeId ? e.target : e.source))
+        .filter((id) => id.startsWith("note-"));
+
+      const links = [...new Set(linkedIds)]
+        .map((id) => nodes.find((n) => n.id === id))
+        .filter(Boolean)
+        .map((n) => ({
+          id: n.id.replace(/^note-/, ""),
+          title: n.data.title,
+          folderId: n.data.folderId,
+        }));
+
       setSelectedNote({
+        id: nodeId.replace(/^note-/, ""),
         title: node.data.title || "Untitled",
         body: node.data.body || "",
+        spaceName: node.data.spaceName || "",
+        folderId: node.data.folderId,
+        links,
       });
       setSelectedEntity(null);
     }
@@ -738,12 +781,21 @@ function GraphContent() {
         >
           ←
         </button>
-        <div className="pointer-events-auto flex flex-col rounded-[12px] px-2 py-0.5">
-          <h1 className="mc-display text-[20px] text-white">
-            {noteId ? "Note map" : "Second brain"}
-          </h1>
-          {noteId && noteTitle && (
-            <p className="text-[11px] text-[#8B877E]">{noteTitle}</p>
+        <div className="pointer-events-auto flex flex-1 items-start justify-between">
+          <div>
+            <h1 className="mc-display text-[20px] text-white">
+              {noteId ? "Note map" : "Graph View"}
+            </h1>
+            <p className="mt-0.5 text-[12px] text-white/50">
+              {noteId && noteTitle
+                ? noteTitle
+                : `${nodes.filter((n) => n.id.startsWith("note-")).length} notes • green lines are @mention links`}
+            </p>
+          </div>
+          {!noteId && (
+            <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-white/40">
+              • Live links
+            </span>
           )}
         </div>
       </header>
@@ -782,56 +834,76 @@ function GraphContent() {
         </div>
       )}
 
-      {/* Slide-out Sidebar Panel */}
+      {/* Node preview panel: full-width above the nav on phone, anchored
+          bottom-left on desktop (per the reference). */}
       {(selectedNote || selectedEntity) && (
-        <div className="animate-slide-in-right fixed top-0 right-0 z-30 flex h-full w-[var(--inspector-w)] flex-col border-l border-[#2E2E2E] bg-[#1E1E1E] p-6 text-white shadow-2xl transition-all duration-300">
-          <div className="flex items-center justify-between">
-            <span className="mc-panel-label">
-              {selectedEntity ? "Entity" : "Content Details"}
-            </span>
+        <div className="mc-graph-panel fixed bottom-24 left-4 right-4 z-30 lg:bottom-6 lg:left-6 lg:right-auto lg:w-[520px]">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              {selectedEntity ? (
+                <>
+                  <div className="text-[14px] font-medium" style={{ color: "var(--text-strong)" }}>
+                    {selectedEntity.name}
+                  </div>
+                  <div className="mt-0.5 text-[12px] capitalize" style={{ color: "var(--text-dim)" }}>
+                    {selectedEntity.type}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="truncate text-[14px] font-medium" style={{ color: "var(--text-strong)" }}>
+                    {selectedNote.title || "Untitled"}
+                  </div>
+                  <div className="mt-0.5 text-[12px]" style={{ color: "var(--text-dim)" }}>
+                    {selectedNote.spaceName || "Space"}
+                    {selectedNote.links && selectedNote.links.length > 0
+                      ? ` • ${selectedNote.links.length} ${selectedNote.links.length === 1 ? "link" : "links"}`
+                      : ""}
+                  </div>
+
+                  {selectedNote.links && selectedNote.links.length > 0 && (
+                    <div
+                      className="mt-3 flex flex-wrap items-center gap-1.5 text-[12px]"
+                      style={{ color: "var(--text-body)" }}
+                    >
+                      <span>Linked via</span>
+                      {selectedNote.links.map((l) => (
+                        <button
+                          key={l.id}
+                          type="button"
+                          onClick={() => router.push(`/folder/${l.folderId}?note=${l.id}`)}
+                          className="mc-mention"
+                        >
+                          {l.title || "Untitled"}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(`/folder/${selectedNote.folderId}?note=${selectedNote.id}`)
+                    }
+                    className="mc-link mt-3 block"
+                  >
+                    Open note &rarr;
+                  </button>
+                </>
+              )}
+            </div>
             <button
               onClick={() => {
                 setSelectedNote(null);
                 setSelectedEntity(null);
               }}
-              className="cursor-pointer text-2xl text-[#8B877E] transition-colors hover:text-white focus:outline-none"
+              aria-label="Close preview"
+              className="shrink-0 transition-colors"
+              style={{ color: "var(--text-dim)" }}
             >
-              &times;
+              <X size={16} strokeWidth={1.8} />
             </button>
           </div>
-          {selectedEntity ? (
-            <>
-              <div className="mt-4 flex items-center gap-3">
-                <div
-                  className="flex h-10 w-10 items-center justify-center border-2 border-clay"
-                  style={{ transform: "rotate(45deg)", borderRadius: 4, backgroundColor: "#C4571F22" }}
-                >
-                  <span style={{ transform: "rotate(-45deg)" }}>
-                    {ENTITY_ICONS[selectedEntity.type] || "◆"}
-                  </span>
-                </div>
-                <div>
-                  <h2 className="mc-display text-[24px] leading-tight text-white">
-                    {selectedEntity.name}
-                  </h2>
-                  <p className="mt-0.5 text-[12px] capitalize text-[#A8BC8B]">
-                    {selectedEntity.type}
-                  </p>
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              <h2 className="mc-display mt-2 border-b border-[#2E2E2E] pb-3 text-[24px] leading-tight text-white">
-                {selectedNote.title}
-              </h2>
-              <div className="scrollbar-thin mt-4 flex-1 overflow-y-auto whitespace-pre-wrap pr-1 text-[13.5px] leading-relaxed text-white/70">
-                {selectedNote.body || (
-                  <span className="italic text-[#8B877E]">No description available.</span>
-                )}
-              </div>
-            </>
-          )}
         </div>
       )}
     </div>

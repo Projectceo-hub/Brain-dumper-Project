@@ -941,26 +941,56 @@ export default function FolderPage() {
               `min-height:auto`, which refuses to shrink below its content
               and would push the footer off-screen instead of scrolling.
               `pb-16` keeps the last line clear of the footer edge. */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-5 pt-6 pb-16">
-          {/* Back button */}
+          {/* Breadcrumb bar: back chevron + space name + note title */}
           <div
-            className="flex cursor-pointer items-center gap-1.5 text-[13px] transition-colors"
-            style={{ color: "var(--text-dim)" }}
-            onClick={handleCloseEditor}
+            className="flex shrink-0 items-center justify-between px-5 py-4 lg:px-10"
+            style={{
+              borderBottom: "1px solid var(--border-1)",
+              background: "rgba(255, 255, 255, 0.8)",
+            }}
           >
-            <ArrowLeft size={16} strokeWidth={1.8} />
-            <span>Notes</span>
+            <div className="flex min-w-0 items-center gap-3">
+              <button
+                type="button"
+                onClick={handleCloseEditor}
+                aria-label="Back to notes"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-full"
+                style={{ background: "var(--bg-neutral-100)" }}
+              >
+                <ArrowLeft size={16} strokeWidth={1.8} />
+              </button>
+              <span
+                className="shrink-0 text-[13px]"
+                style={{ color: "var(--text-dim)" }}
+              >
+                {folder?.name}
+              </span>
+              <span
+                className="h-1 w-1 shrink-0 rounded-full"
+                style={{ background: "var(--border-1)" }}
+              />
+              <span
+                className="truncate text-[13px] font-medium"
+                style={{ color: "var(--text-strong)" }}
+              >
+                {editTitle || "Untitled"}
+              </span>
+            </div>
           </div>
 
+          <div className="mx-auto w-full max-w-[760px] flex-1 min-h-0 overflow-y-auto px-5 pt-8 pb-16 lg:px-10">
           {/* Title */}
           <input
             type="text"
             value={editTitle}
             onChange={(e) => handleTitleChange(e.target.value)}
             placeholder="Note title"
-            className="themed-placeholder mc-display mt-4 w-full border-none bg-transparent text-[26px] outline-none"
-            style={{ color: "var(--text-primary)" }}
+            className="themed-placeholder mc-display w-full border-none bg-transparent text-[32px] leading-tight outline-none"
+            style={{ color: "var(--text-strong)" }}
           />
+          <div className="mt-2 text-[12px]" style={{ color: "var(--text-dim)" }}>
+            Last edited {getRelativeTimeString(editingNote.updatedAt)}
+          </div>
 
           {/* Body — contenteditable with @mention support.
               Same structural role as the previous <textarea> (full-width,
@@ -972,7 +1002,7 @@ export default function FolderPage() {
               and while it WAS a flex child, `flex-1` (flex-basis:0) paired
               with an explicit min-height let this wrapper size itself
               shorter than the contenteditable inside it. */}
-          <div className="relative w-full mt-4 min-h-[300px]">
+          <div className="relative mt-8 w-full min-h-[300px]">
             <div
               ref={editorRef}
               contentEditable
@@ -980,7 +1010,7 @@ export default function FolderPage() {
               onInput={handleEditorInput}
               onKeyDown={handleEditorKeyDown}
               data-ph="Start writing... use @ to mention a note"
-              className="themed-placeholder-CE w-full resize-none border-none bg-transparent text-[15px] leading-[1.65] outline-none min-h-[300px]"
+              className="themed-placeholder-CE w-full resize-none border-none bg-transparent text-[15px] leading-[1.7] outline-none min-h-[300px]"
               style={{
                 color: "var(--text-primary)",
                 whiteSpace: "pre-wrap",

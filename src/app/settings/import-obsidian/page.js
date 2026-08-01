@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import {
@@ -182,28 +183,30 @@ export default function ImportObsidianPage() {
           )}
 
           {phase === "idle" && (
-            <div className="p-6" style={card}>
-              <p
-                className="font-sans text-sm leading-relaxed"
-                style={{ color: "var(--text-secondary)" }}
+            <div
+              className="mc-dropzone group cursor-pointer"
+              onClick={handlePickFile}
+            >
+              <div className="mc-space-icon mx-auto h-10 w-10">
+                <Upload size={20} strokeWidth={1.8} />
+              </div>
+              <div
+                className="mt-3 text-[14px] font-medium"
+                style={{ color: "var(--text-strong)" }}
               >
-                Pick the zip of your Obsidian vault. Nothing is uploaded anywhere &mdash;
-                we read it directly in your browser.
-              </p>
+                Drop Obsidian zip
+              </div>
+              <div className="mt-1 text-[11px]" style={{ color: "var(--text-dim)" }}>
+                Markdown + wikilinks &rarr; @mentions
+              </div>
               <p
-                className="font-sans text-xs mt-3"
-                style={{ color: "var(--text-muted)" }}
+                className="mx-auto mt-3 max-w-md text-[11px] leading-relaxed"
+                style={{ color: "var(--text-dim)" }}
               >
-                To make the zip: in your file manager, right-click your vault folder and
-                choose &ldquo;Compress&rdquo; / &ldquo;Send to &rarr; Compressed folder&rdquo;.
-                The top-level{" "}
-                <code
-                  className="font-mono text-xs px-1 rounded"
-                  style={{ background: "var(--border)", color: "var(--text-primary)" }}
-                >
-                  .obsidian/
-                </code>{" "}
-                folder is detected and skipped automatically.
+                Right-click your vault folder and choose &ldquo;Compress&rdquo;. The
+                top-level{" "}
+                <code className="font-mono">.obsidian/</code> folder is detected and
+                skipped automatically.
               </p>
               <input
                 ref={fileInputRef}
@@ -212,13 +215,8 @@ export default function ImportObsidianPage() {
                 onChange={onFile}
                 className="hidden"
               />
-              <button
-                type="button"
-                onClick={handlePickFile}
-                className="mt-5 rounded-full px-5 py-2.5 font-sans text-sm font-semibold shadow-md transition-all active:scale-[0.98]"
-                style={{ background: "var(--accent)", color: "#fff" }}
-              >
-                Choose Obsidian vault zip&hellip;
+              <button type="button" onClick={handlePickFile} className="mc-link mt-2">
+                Browse files
               </button>
             </div>
           )}

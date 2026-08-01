@@ -227,7 +227,7 @@ export default function SettingsPage() {
 
         {/* ----------------------------- Account ----------------------------- */}
         <section className="mt-8 max-w-3xl">
-          <h2 className="mc-display text-[20px] mb-3" style={{ color: "var(--text-primary)" }}>
+          <h2 className="mc-section-label mb-3 uppercase">
             Account
           </h2>
 
@@ -421,52 +421,58 @@ export default function SettingsPage() {
 
         {/* ----------------------------- Appearance ----------------------------- */}
         <section className="mt-12 max-w-3xl">
-          <h2 className="mc-display text-[20px] mb-3" style={{ color: "var(--text-primary)" }}>
+          <h2 className="mc-section-label mb-3 uppercase">
             Appearance
           </h2>
           <div className="p-5" style={cardStyle}>
             <p className="font-sans text-sm mb-4" style={{ color: "var(--text-secondary)" }}>
               Choose a theme. It saves to this device and applies across the whole app.
             </p>
-            <div className="flex flex-wrap gap-6">
+            <div className="grid gap-3 sm:grid-cols-2">
               {THEMES.map((t) => {
-                const swatch = THEME_SWATCHES[t.id];
                 const active = theme === t.id;
                 return (
                   <button
                     key={t.id}
                     type="button"
                     onClick={() => pickTheme(t.id)}
-                    className="flex flex-col items-center gap-2 cursor-pointer"
+                    className="cursor-pointer bg-white p-4 text-left"
+                    style={{
+                      borderRadius: "var(--radius-panel)",
+                      border: `2px solid ${active ? "var(--accent-green)" : "var(--border-1)"}`,
+                      boxShadow: "0 2px 12px rgba(0, 0, 0, 0.04)",
+                    }}
                     aria-label={`Switch to ${t.name} theme`}
                     aria-pressed={active}
                   >
-                    <span
-                      className="flex items-center justify-center rounded-full transition-transform"
-                      style={{
-                        width: 48,
-                        height: 48,
-                        background: swatch.bg,
-                        boxShadow: active
-                          ? "0 0 0 2px #fff, 0 0 0 4px " + swatch.accent
-                          : "0 0 0 1px var(--border)",
-                      }}
-                    >
+                    <div className="mb-3 flex gap-2">
+                      {["#FFFEFB", "#7A8E5D", "#121212"].map((c) => (
+                        <span
+                          key={c}
+                          className="h-6 w-6 rounded-full"
+                          style={{ background: c, border: "1px solid var(--border-1)" }}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between">
                       <span
-                        className="flex items-center justify-center rounded-full"
-                        style={{ width: 32, height: 32, background: swatch.accent }}
+                        className="text-[14px] font-medium"
+                        style={{ color: "var(--text-strong)" }}
                       >
-                        {active && (
-                          <span className="text-white text-base font-bold leading-none">✓</span>
-                        )}
+                        {t.name}
                       </span>
-                    </span>
-                    <span
-                      className="font-sans text-[11px]"
-                      style={{ color: "var(--text-secondary)" }}
-                    >
-                      {t.name}
-                    </span>
+                      {active && (
+                        <span
+                          className="rounded-full px-2 py-1 text-[11px] text-white"
+                          style={{ background: "var(--accent-green)" }}
+                        >
+                          Active
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 text-[11px]" style={{ color: "var(--text-dim)" }}>
+                      Soft paper, sage accent, ink sidebar
+                    </div>
                   </button>
                 );
               })}
@@ -476,39 +482,41 @@ export default function SettingsPage() {
                 return (
                   <div
                     key={t.id}
-                    className="flex cursor-not-allowed flex-col items-center gap-2 opacity-40"
+                    className="cursor-not-allowed p-4"
+                    style={{
+                      borderRadius: "var(--radius-panel)",
+                      border: "1px dashed var(--border-1)",
+                      background: "var(--bg-neutral-100)",
+                    }}
                     aria-disabled="true"
                     title={`${t.name} — coming soon`}
                   >
-                    <span
-                      className="flex items-center justify-center rounded-full"
-                      style={{
-                        width: 48,
-                        height: 48,
-                        background: swatch.bg,
-                        boxShadow: "0 0 0 1px var(--border-1)",
-                      }}
-                    >
+                    <div className="mb-3 flex gap-2">
+                      {[swatch.bg, swatch.accent, "#1A221E"].map((c, i) => (
+                        <span
+                          key={i}
+                          className="h-6 w-6 rounded-full"
+                          style={{ background: c, border: "1px solid rgba(0,0,0,0.05)" }}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between">
                       <span
-                        className="flex items-center justify-center rounded-full"
-                        style={{ width: 32, height: 32, background: swatch.accent }}
-                      />
-                    </span>
-                    <span
-                      className="font-sans text-[11px]"
-                      style={{ color: "var(--text-secondary)" }}
-                    >
-                      {t.name}
-                    </span>
-                    <span
-                      className="rounded-full px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide"
-                      style={{
-                        background: "var(--bg-neutral-200)",
-                        color: "var(--text-dim)",
-                      }}
-                    >
-                      Coming Soon
-                    </span>
+                        className="text-[14px] font-medium"
+                        style={{ color: "var(--text-strong)" }}
+                      >
+                        {t.name}
+                      </span>
+                      <span
+                        className="rounded-full border bg-white px-2 py-1 text-[11px]"
+                        style={{
+                          borderColor: "var(--border-1)",
+                          color: "var(--text-dim)",
+                        }}
+                      >
+                        Coming Soon
+                      </span>
+                    </div>
                   </div>
                 );
               })}
@@ -518,7 +526,7 @@ export default function SettingsPage() {
 
         {/* ----------------------------- Integrations ----------------------------- */}
         <section className="mt-12 max-w-3xl mb-16">
-          <h2 className="mc-display text-[20px] mb-3" style={{ color: "var(--text-primary)" }}>
+          <h2 className="mc-section-label mb-3 uppercase">
             Integrations
           </h2>
           <div className="flex flex-col gap-4">

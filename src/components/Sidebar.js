@@ -7,8 +7,6 @@ import {
   Home,
   Layers,
   Network,
-  MessageCircle,
-  User,
   Plus,
   Download,
   Settings as SettingsIcon,
@@ -38,7 +36,7 @@ import { createClient } from "@/lib/supabase/client";
 
 // lucide default stroke is 2; the 7B spec calls for 1.8 everywhere.
 const ICON = { size: 18, strokeWidth: 1.8 };
-const NAV_ICON = { size: 22, strokeWidth: 1.8 };
+const NAV_ICON = { size: 20, strokeWidth: 1.8 };
 
 export default function Sidebar({ activeFolderId = null }) {
   const pathname = usePathname();
@@ -200,13 +198,18 @@ export default function Sidebar({ activeFolderId = null }) {
   // ---------------------------------------------------------------- desktop
   const sidebarContent = (
     <aside className="mc-sidebar h-full overflow-y-auto">
-      <div className="flex items-center gap-2.5 px-1 pb-5">
-        <div className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-white">
+      <div className="mb-6 flex items-center gap-3">
+        <div className="grid h-8 w-8 place-items-center rounded-full bg-white">
           <span className="mc-display text-[15px] text-[#121212]">M</span>
         </div>
-        <span className="text-[16px] font-medium tracking-tight text-white">
-          MindCanvas
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="mc-display text-[18px] font-semibold tracking-tight text-white">
+            MindCanvas
+          </span>
+          <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-white/60">
+            v1
+          </span>
+        </div>
       </div>
 
       <button
@@ -233,7 +236,7 @@ export default function Sidebar({ activeFolderId = null }) {
         </p>
       )}
 
-      <div className="mt-6 flex flex-col gap-1">
+      <div className="mt-6 flex flex-col gap-1.5">
         <Link
           href="/"
           onClick={() => setMobileOpen(false)}
@@ -252,55 +255,6 @@ export default function Sidebar({ activeFolderId = null }) {
           <Network {...ICON} />
           Graph View
         </Link>
-      </div>
-
-      <div className="mt-7">
-        <button
-          type="button"
-          onClick={() => setSpacesOpen((v) => !v)}
-          className="flex w-full items-center justify-between px-3"
-        >
-          <span className="text-[11px] uppercase tracking-[0.12em] text-white/40">
-            Spaces
-          </span>
-          <ChevronDown
-            size={14}
-            strokeWidth={1.8}
-            className={`text-white/40 transition-transform ${spacesOpen ? "" : "-rotate-90"}`}
-          />
-        </button>
-
-        {spacesOpen && (
-          <div className="mt-3 flex flex-col gap-0.5">
-            {folders.map((folder) => (
-              <Link
-                key={folder.id}
-                href={`/folder/${folder.id}`}
-                onClick={() => setMobileOpen(false)}
-                className="mc-nav-item justify-between"
-                data-active={activeFolderId === folder.id ? "true" : "false"}
-              >
-                <span className="truncate">{folder.name}</span>
-                <span className="ml-2 shrink-0 text-[11px] text-white/35">
-                  {noteCounts[folder.id] || 0}
-                </span>
-              </Link>
-            ))}
-
-            <button
-              type="button"
-              onClick={handleNewSpace}
-              disabled={creating}
-              className="mc-nav-item disabled:opacity-50"
-            >
-              <Plus size={16} strokeWidth={1.8} />
-              {creating ? "Creating…" : "New space"}
-            </button>
-          </div>
-        )}
-      </div>
-
-      <div className="mt-auto flex flex-col gap-1 border-t border-white/10 pt-4">
         <Link
           href="/settings/import"
           onClick={() => setMobileOpen(false)}
@@ -314,7 +268,9 @@ export default function Sidebar({ activeFolderId = null }) {
           href="/settings"
           onClick={() => setMobileOpen(false)}
           className="mc-nav-item"
-          data-active={isSettings && !pathname.startsWith("/settings/import") ? "true" : "false"}
+          data-active={
+            isSettings && !pathname.startsWith("/settings/import") ? "true" : "false"
+          }
         >
           <SettingsIcon {...ICON} />
           Settings
@@ -333,30 +289,88 @@ export default function Sidebar({ activeFolderId = null }) {
           {exporting ? "Exporting…" : "Export vault"}
         </button>
         {exportError && (
-          <p className="px-3 text-[11px] text-[#E4A08A]">{exportError}</p>
+          <p className="px-4 text-[11px] text-[#E4A08A]">{exportError}</p>
         )}
+      </div>
 
-        <div className="mt-2 flex items-center gap-2.5 px-3 pt-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#2A2A2A] text-[12px] text-white">
-            {initial}
+      <div className="mt-8">
+        <button
+          type="button"
+          onClick={() => setSpacesOpen((v) => !v)}
+          className="flex w-full items-center justify-between"
+        >
+          <span className="mc-sidebar-label mb-0">SPACES</span>
+          <ChevronDown
+            size={14}
+            strokeWidth={1.8}
+            className={`text-white/40 transition-transform ${spacesOpen ? "" : "-rotate-90"}`}
+          />
+        </button>
+
+        {spacesOpen && (
+          <div className="mt-3 flex flex-col gap-1">
+            {folders.map((folder) => (
+              <Link
+                key={folder.id}
+                href={`/folder/${folder.id}`}
+                onClick={() => setMobileOpen(false)}
+                className="mc-space-row"
+                data-active={activeFolderId === folder.id ? "true" : "false"}
+              >
+                <span className="truncate text-[13.5px] text-white/80">
+                  {folder.name}
+                </span>
+                <span className="ml-2 shrink-0 text-[12px] text-white/40">
+                  {noteCounts[folder.id] || 0} notes
+                </span>
+              </Link>
+            ))}
+
+            <button
+              type="button"
+              onClick={handleNewSpace}
+              disabled={creating}
+              className="mc-space-row justify-start gap-2 text-[13.5px] text-white/50 disabled:opacity-50"
+            >
+              <Plus size={15} strokeWidth={1.8} />
+              {creating ? "Creating…" : "New space"}
+            </button>
           </div>
-          <span className="min-w-0 flex-1 truncate text-[12px] text-white/70" title={email}>
-            {displayName || email || "Signed in"}
-          </span>
-          <button
-            type="button"
-            onClick={handleLogout}
-            aria-label="Log out"
-            className="text-white/40 transition-colors hover:text-white"
-          >
-            <LogOut size={16} strokeWidth={1.8} />
-          </button>
+        )}
+      </div>
+
+      <div className="mt-auto flex items-center gap-3 border-t border-white/10 pt-5">
+        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#F5F3EF] text-[12px] text-[#121212]">
+          {initial}
         </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[13px] font-medium leading-none text-white">
+            {displayName || "Signed in"}
+          </div>
+          <div className="mt-1 truncate text-[11.5px] text-white/40" title={email}>
+            {email}
+          </div>
+        </div>
+        {online && (
+          <span
+            aria-label="Online"
+            className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#7A8E5D]"
+          />
+        )}
+        <button
+          type="button"
+          onClick={handleLogout}
+          aria-label="Log out"
+          className="shrink-0 text-white/40 transition-colors hover:text-white"
+        >
+          <LogOut size={16} strokeWidth={1.8} />
+        </button>
       </div>
     </aside>
   );
 
   // ----------------------------------------------------------------- mobile
+  // Four items, matching the reference: Home, Spaces, Graph, Settings.
   const bottomNav = [
     { key: "home", label: "Home", href: "/", Icon: Home, active: isHome },
     {
@@ -367,8 +381,13 @@ export default function Sidebar({ activeFolderId = null }) {
       active: mobileOpen || pathname.startsWith("/folder"),
     },
     { key: "graph", label: "Graph", href: "/graph", Icon: Network, active: isGraph },
-    { key: "chat", label: "Chat", Icon: MessageCircle, active: false, disabled: true },
-    { key: "you", label: "You", href: "/settings", Icon: User, active: isSettings },
+    {
+      key: "settings",
+      label: "Settings",
+      href: "/settings",
+      Icon: SettingsIcon,
+      active: isSettings,
+    },
   ];
 
   return (
@@ -395,7 +414,7 @@ export default function Sidebar({ activeFolderId = null }) {
         onClick={handleCapture}
         disabled={capturing}
         aria-label="New thought"
-        className="mc-fab fixed bottom-[88px] right-5 z-40 disabled:opacity-60 lg:hidden"
+        className="mc-fab fixed bottom-[86px] right-5 z-40 disabled:opacity-60 lg:hidden"
       >
         {capturing ? (
           <Loader2 size={24} strokeWidth={1.8} className="animate-spin" />
@@ -406,27 +425,16 @@ export default function Sidebar({ activeFolderId = null }) {
 
       {/* Mobile: bottom nav */}
       <nav className="mc-bottomnav fixed inset-x-0 bottom-0 z-40 flex items-center justify-around px-2 lg:hidden">
-        {bottomNav.map(({ key, label, href, onClick, Icon, active, disabled }) => {
+        {bottomNav.map(({ key, label, href, onClick, Icon, active }) => {
           const inner = (
             <>
               <Icon {...NAV_ICON} />
               <span>{label}</span>
               <span
-                className={`h-1 w-1 rounded-full ${active ? "bg-[#7A8E5D]" : "bg-transparent"}`}
+                className={`-mt-0.5 h-1 w-1 rounded-full ${active ? "bg-[#121212]" : "bg-transparent"}`}
               />
             </>
           );
-          if (disabled) {
-            return (
-              <span
-                key={key}
-                aria-disabled="true"
-                className="mc-bottomnav-item opacity-40"
-              >
-                {inner}
-              </span>
-            );
-          }
           return href ? (
             <Link
               key={key}

@@ -383,20 +383,26 @@ body {
  * dark-studio, midnight, sepia, slate) without any JS DOM-style mutation.
  */
 
+/* Phase 7B: inline @mention chips render as solid sage pills with white
+   text, matching the reference. The span's textContent already carries the
+   leading "@", so no pseudo-element prefix is added here. */
 .mention-token {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: var(--accent);
-  border-radius: 4px;
-  padding: 1px 4px;
-  margin: 0 1px;
+  display: inline-flex;
+  align-items: center;
+  background: var(--accent-green);
+  color: #fff;
+  border-radius: var(--radius-chip);
+  padding: 2px 10px;
+  margin: 0 2px;
   cursor: pointer;
   user-select: none;
+  font-size: 13px;
   font-weight: 500;
   transition: background 120ms ease-out;
 }
 
 .mention-token:hover {
-  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  background: var(--accent-green-hover);
 }
 
 /* Deleted-target fallback: a [[wikilink]] (from import) or @mention whose
@@ -583,19 +589,28 @@ body {
 
 
 
+
 /* ================================================================== */
-/* PHASE 7B — shared component classes                                */
-/* Derived from the approved mockups (public mockup refs: mobile.html, */
-/* desktop.html). Every radius here comes from the 7B radius tokens.   */
+/* PHASE 7B — component classes                                       */
+/* Values measured directly from the approved reference               */
+/* (Mindcanvas-Current.html), not derived.                            */
 /* ================================================================== */
 
 .mc-display {
   font-family: var(--font-instrument-serif), ui-serif, Georgia, serif;
-  font-weight: 400;
-  letter-spacing: -0.02em;
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }
 
-/* --- Note card (mobile + desktop list) --- */
+/* --- Section label: "YOUR SPACES" / "RECENT NOTES" / "THEME" ------- */
+.mc-section-label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  color: var(--text-strong);
+}
+
+/* --- Generic white card ------------------------------------------- */
 .mc-card {
   width: 100%;
   text-align: left;
@@ -603,53 +618,67 @@ body {
   border: 1px solid var(--border-1);
   border-radius: var(--radius-card);
   padding: 20px;
-  box-shadow: var(--shadow-card);
-  transition: box-shadow 200ms ease, transform 200ms ease;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 200ms ease, border-color 200ms ease;
 }
-.mc-card:hover {
-  box-shadow: var(--shadow-card-hover);
-}
-.mc-card-meta {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-weight: 500;
+.mc-card:hover { box-shadow: 0 6px 20px rgba(0, 0, 0, 0.07); }
+
+/* --- Space card: circle icon + name + "N notes • time" ------------- */
+.mc-space-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-chip);
+  background: var(--bg-neutral-100);
+  display: grid;
+  place-items: center;
   color: var(--text-dim);
+  flex-shrink: 0;
 }
-.mc-card-title {
-  font-family: var(--font-instrument-serif), ui-serif, Georgia, serif;
-  font-size: 18px;
+.mc-space-name {
+  font-size: 15px;
+  font-weight: 500;
   line-height: 1.25;
   color: var(--text-strong);
-  letter-spacing: -0.01em;
 }
-.mc-card-body {
-  font-size: 13.5px;
-  line-height: 1.5;
-  color: #5A5752;
+.mc-space-meta {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 4px;
 }
 
-/* --- Tag chip with colour dot --- */
-.mc-chip {
-  display: inline-flex;
+/* --- Recent notes: one card, 64px rows, hairline dividers ---------- */
+.mc-list-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-card);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+.mc-row {
+  width: 100%;
+  text-align: left;
+  height: 64px;
+  padding: 0 20px;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: var(--radius-chip);
-  background: #F8F6F1;
-  border: 1px solid var(--border-2);
-  font-size: 11px;
-  font-weight: 500;
-  color: #5A5752;
+  justify-content: space-between;
+  gap: 12px;
+  transition: background 150ms ease;
 }
-.mc-chip-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--radius-chip);
-  background: var(--accent-green);
+.mc-row + .mc-row { border-top: 1px solid var(--border-1); }
+.mc-row:hover { background: var(--bg-neutral-100); }
+.mc-row-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-strong);
+}
+.mc-row-meta {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 2px;
 }
 
-/* --- Buttons --- */
+/* --- Buttons ------------------------------------------------------- */
 .mc-btn-primary {
   display: inline-flex;
   align-items: center;
@@ -660,10 +689,10 @@ body {
   border-radius: var(--radius-button);
   font-size: 14px;
   font-weight: 500;
-  padding: 10px 18px;
+  padding: 11px 18px;
   transition: background 150ms ease;
 }
-.mc-btn-primary:hover { background: var(--accent-green-hover); }
+.mc-btn-primary:hover { background: #6f8254; }
 
 .mc-btn-secondary {
   display: inline-flex;
@@ -681,29 +710,14 @@ body {
 }
 .mc-btn-secondary:hover { background: var(--bg-neutral-100); }
 
-/* --- Segmented control (All Notes / Digest) --- */
-.mc-segment {
-  display: inline-flex;
-  padding: 4px;
-  background: var(--bg-neutral-200);
-  border-radius: var(--radius-chip);
-}
-.mc-segment-item {
-  padding: 0 16px;
-  height: 28px;
-  border-radius: var(--radius-chip);
-  font-size: 12px;
+.mc-link {
+  font-size: 13px;
   font-weight: 500;
-  color: var(--text-dim);
-  transition: all 150ms ease;
+  color: var(--accent-green);
 }
-.mc-segment-item[data-active="true"] {
-  background: var(--dark-surface);
-  color: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
+.mc-link:hover { text-decoration: underline; }
 
-/* --- Dark sidebar (desktop) --- */
+/* --- Dark sidebar -------------------------------------------------- */
 .mc-sidebar {
   width: var(--sidebar-w);
   min-width: var(--sidebar-w);
@@ -713,13 +727,14 @@ body {
   padding: 20px;
 }
 .mc-nav-item {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
+  padding: 10px 16px;
   border-radius: var(--radius-button);
   font-size: 13.5px;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.7);
   transition: background 150ms ease, color 150ms ease;
 }
 .mc-nav-item:hover {
@@ -730,13 +745,29 @@ body {
   background: var(--dark-surface-2);
   color: #fff;
 }
+.mc-sidebar-label {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 12px;
+}
+.mc-space-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: var(--radius-button);
+  transition: background 150ms ease;
+}
+.mc-space-row:hover { background: rgba(255, 255, 255, 0.06); }
+.mc-space-row[data-active="true"] { background: var(--dark-surface-2); }
 
-/* --- Mobile bottom nav --- */
+/* --- Mobile bottom nav (4 items) ----------------------------------- */
 .mc-bottomnav {
   height: var(--bottomnav-h);
-  background: rgba(255, 254, 251, 0.9);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: #fff;
   border-top: 1px solid var(--border-1);
 }
 .mc-bottomnav-item {
@@ -744,32 +775,86 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  min-width: 52px;
-  padding: 4px 0;
-  font-size: 10px;
+  min-width: 56px;
+  font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.02em;
   color: var(--text-dim);
 }
-.mc-bottomnav-item[data-active="true"] { color: var(--accent-green); }
+.mc-bottomnav-item[data-active="true"] { color: var(--text-strong); }
 
-/* --- Floating capture button (mobile FAB) --- */
+/* --- Floating capture button (56px in the reference) --------------- */
 .mc-fab {
-  width: 60px;
-  height: 60px;
+  width: 56px;
+  height: 56px;
   border-radius: var(--radius-button);
   background: var(--accent-green);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-fab);
+  box-shadow: 0 8px 24px rgba(122, 142, 93, 0.35);
   transition: background 150ms ease, transform 150ms ease;
 }
-.mc-fab:hover { background: var(--accent-green-hover); }
+.mc-fab:hover { background: #6f8254; }
 .mc-fab:active { transform: scale(0.96); }
 
-/* --- Panels / inspector --- */
+/* --- @mention chip ------------------------------------------------- */
+.mc-mention {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--accent-green);
+  color: #fff;
+  border-radius: var(--radius-chip);
+  padding: 2px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  vertical-align: baseline;
+}
+.mc-mention::before {
+  content: "@";
+  display: grid;
+  place-items: center;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-chip);
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 10px;
+  line-height: 1;
+}
+
+/* --- Graph: white node cards on the dark canvas -------------------- */
+.mc-graph-node {
+  background: #fff;
+  border: 1px solid var(--border-1);
+  border-radius: 16px;
+  padding: 12px 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  min-width: 120px;
+  max-width: 190px;
+  text-align: left;
+}
+.mc-graph-node-title {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--text-strong);
+}
+.mc-graph-node-space {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+.mc-graph-panel {
+  background: #fff;
+  border: 1px solid var(--border-1);
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  padding: 16px 18px;
+}
+
+/* --- Panels / inputs ----------------------------------------------- */
 .mc-panel {
   background: var(--card-bg);
   border: 1px solid var(--border-1);
@@ -782,16 +867,24 @@ body {
   letter-spacing: 0.12em;
   color: var(--text-dim);
 }
-
-/* --- Inputs --- */
 .mc-input {
-  background: #fff;
-  border: 1px solid var(--border-1);
+  background: var(--bg-neutral-200);
+  border: 1px solid transparent;
   border-radius: var(--radius-input);
-  padding: 10px 18px;
-  font-size: 13.5px;
+  padding: 12px 18px;
+  font-size: 14px;
   color: var(--text-strong);
   outline: none;
 }
 .mc-input:focus { border-color: var(--accent-green); }
 
+/* --- Dropzone (import) --------------------------------------------- */
+.mc-dropzone {
+  border: 2px dashed var(--border-1);
+  border-radius: var(--radius-card);
+  background: #fff;
+  padding: 24px;
+  text-align: center;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+.mc-dropzone:hover { border-color: var(--accent-green); }

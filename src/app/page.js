@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, FolderOpen, ChevronRight } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import {
   hasAnyFolders,
@@ -314,6 +314,7 @@ export default function Dashboard() {
   const hero = folders[0] || null;
   const gridSpaces = showAllSpaces ? folders.slice(1) : folders.slice(1, 7);
   const hasMoreSpaces = folders.length > 7;
+  const totalNotes = Object.values(noteCounts).reduce((sum, n) => sum + n, 0);
 
   const capsuleExpanded = capsuleState !== "collapsed";
   const capsuleRadius = capsuleHeight > 56 ? "22px" : "9999px";
@@ -322,20 +323,18 @@ export default function Dashboard() {
     <div className="flex min-h-screen" style={{ background: "var(--bg-primary)" }}>
       <Sidebar />
 
-      <div className="relative min-h-screen flex-1 select-none px-5 pt-6 pb-40 lg:px-8 lg:pt-8 lg:pb-32">
+      <div className="relative mx-auto min-h-screen w-full max-w-[1000px] flex-1 select-none p-5 pb-40 lg:p-8 lg:pb-32">
         <header className="mb-6 flex items-start justify-between gap-4">
           <div>
             <h1
-              className="mc-display text-[28px] lg:text-[32px]"
+              className="mc-display text-[26px] leading-tight lg:text-[28px]"
               style={{ color: "var(--text-strong)" }}
             >
               {getGreeting()}
             </h1>
-            <p
-              className="mt-1 text-[11px] font-medium uppercase tracking-[0.08em]"
-              style={{ color: "var(--text-dim)" }}
-            >
-              Your spaces
+            <p className="mt-1 text-[13.5px]" style={{ color: "var(--text-dim)" }}>
+              You have {totalNotes} {totalNotes === 1 ? "note" : "notes"} across{" "}
+              {folders.length} {folders.length === 1 ? "space" : "spaces"}
             </p>
             {syncMessage && (
               <p className="mt-2 text-[12px]" style={{ color: "var(--text-dim)" }}>
@@ -350,79 +349,102 @@ export default function Dashboard() {
 
         {/* ---------------------------- HERO SPACE ---------------------------- */}
         {hero && (
-          <Link
-            href={`/folder/${hero.id}`}
-            className="stagger-item folder-card relative block overflow-hidden p-5"
+          <div
+            className="stagger-item mb-8 bg-white p-6"
             style={{
-              minHeight: "160px",
-              backgroundColor: "var(--dark-surface)",
               borderRadius: "var(--radius-card)",
+              border: "1px solid var(--border-1)",
+              boxShadow: "0 2px 12px rgba(0, 0, 0, 0.04)",
             }}
           >
-            <div
-              className="pointer-events-none absolute top-0 right-0 h-3/5 w-3/5"
-              style={{
-                background:
-                  "radial-gradient(circle at top right, rgba(122, 142, 93, 0.15), transparent 70%)",
-              }}
-            />
-            <h2 className="mc-display relative z-10 text-[28px] text-white">
+            <div className="mb-4 flex items-center justify-between">
+              <div
+                className="flex items-center gap-2 text-[12px]"
+                style={{ color: "var(--text-dim)" }}
+              >
+                <span className="mc-space-icon h-7 w-7">
+                  <FolderOpen size={16} strokeWidth={1.8} />
+                </span>
+                <span>
+                  {(noteCounts[hero.id] || 0)}{" "}
+                  {(noteCounts[hero.id] || 0) === 1 ? "note" : "notes"}
+                </span>
+                <span
+                  className="h-1 w-1 rounded-full"
+                  style={{ background: "var(--border-1)" }}
+                />
+                <span>Last edited {getRelativeTimeString(hero.updatedAt)}</span>
+              </div>
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ background: "var(--accent-green)" }}
+              />
+            </div>
+
+            <h2
+              className="mc-display text-[22px] leading-tight"
+              style={{ color: "var(--text-strong)" }}
+            >
               {hero.name}
             </h2>
-            <p className="relative z-10 mt-1 text-[13px] text-white/60">
-              {(noteCounts[hero.id] || 0)}{" "}
-              {(noteCounts[hero.id] || 0) === 1 ? "note" : "notes"}
-            </p>
-            <div className="relative z-10 mt-6 text-[11px] uppercase tracking-widest text-white/50">
-              Last active {getRelativeTimeString(hero.updatedAt)}
-            </div>
-          </Link>
+
+            <Link
+              href={`/folder/${hero.id}`}
+              className="mc-link mt-5 inline-block"
+            >
+              Open space &rarr;
+            </Link>
+          </div>
         )}
 
         {/* ---------------------------- SPACES GRID --------------------------- */}
         {gridSpaces.length > 0 && (
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            {gridSpaces.map((folder, idx) => {
-              const noteCount = noteCounts[folder.id] || 0;
-              return (
-                <Link
-                  key={folder.id}
-                  href={`/folder/${folder.id}`}
-                  className="stagger-item folder-card mc-card block"
-                  style={{ animationDelay: `${idx * 40}ms`, padding: "20px" }}
+          <>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="mc-section-label">YOUR SPACES</h3>
+              {hasMoreSpaces && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllSpaces((v) => !v)}
+                  className="mc-link"
                 >
-                  <h2 className="mc-card-title">{folder.name}</h2>
-                  <p className="mt-1 text-[11px]" style={{ color: "var(--text-dim)" }}>
-                    {noteCount} {noteCount === 1 ? "note" : "notes"}
-                    {folder.updatedAt ? ` · ${getRelativeTimeString(folder.updatedAt)}` : ""}
-                  </p>
-                </Link>
-              );
-            })}
-          </div>
-        )}
+                  {showAllSpaces ? "Show fewer" : "View all spaces"}
+                </button>
+              )}
+            </div>
 
-        {hasMoreSpaces && !showAllSpaces && (
-          <button
-            type="button"
-            onClick={() => setShowAllSpaces(true)}
-            className="mt-4 text-[12px]"
-            style={{ color: "var(--accent-green)" }}
-          >
-            View all spaces &rarr;
-          </button>
+            <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-3">
+              {gridSpaces.map((folder, idx) => {
+                const noteCount = noteCounts[folder.id] || 0;
+                return (
+                  <Link
+                    key={folder.id}
+                    href={`/folder/${folder.id}`}
+                    className="stagger-item folder-card mc-card block"
+                    style={{ animationDelay: `${idx * 40}ms` }}
+                  >
+                    <span className="mc-space-icon">
+                      <FolderOpen size={16} strokeWidth={1.8} />
+                    </span>
+                    <div className="mc-space-name mt-3">{folder.name}</div>
+                    <div className="mc-space-meta">
+                      {noteCount} {noteCount === 1 ? "note" : "notes"}
+                      {folder.updatedAt
+                        ? ` • ${getRelativeTimeString(folder.updatedAt)}`
+                        : ""}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </>
         )}
 
         {/* ---------------------------- RECENT NOTES -------------------------- */}
         {recentNotes.length > 0 && (
-          <section className="mt-10">
-            <h2
-              className="text-[11px] uppercase tracking-widest"
-              style={{ color: "var(--text-dim)" }}
-            >
-              Recent
-            </h2>
-            <div className="mt-3">
+          <section>
+            <h3 className="mc-section-label mb-3">RECENT NOTES</h3>
+            <div className="mc-list-card">
               {recentNotes.map((note) => (
                 <button
                   key={note.id}
@@ -430,21 +452,22 @@ export default function Dashboard() {
                   onClick={() =>
                     router.push(`/folder/${note.folderId}?note=${note.id}`)
                   }
-                  className="flex w-full items-center justify-between gap-4 py-3 text-left"
-                  style={{ borderBottom: "1px solid var(--border-1)" }}
+                  className="mc-row"
                 >
-                  <span
-                    className="min-w-0 flex-1 truncate text-[14px]"
-                    style={{ color: "var(--text-strong)" }}
-                  >
-                    {note.title || "Untitled"}
+                  <span className="min-w-0">
+                    <span className="mc-row-title block truncate pr-3">
+                      {note.title || "Untitled"}
+                    </span>
+                    <span className="mc-row-meta block">
+                      {note.folderName} • {getRelativeTimeString(note.updatedAt)}
+                    </span>
                   </span>
-                  <span
-                    className="shrink-0 text-[11px]"
+                  <ChevronRight
+                    size={16}
+                    strokeWidth={1.8}
                     style={{ color: "var(--text-dim)" }}
-                  >
-                    {note.folderName} &middot; {getRelativeTimeString(note.updatedAt)}
-                  </span>
+                    className="shrink-0"
+                  />
                 </button>
               ))}
             </div>
