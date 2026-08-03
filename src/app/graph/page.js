@@ -89,13 +89,18 @@ function EntityNode({ data }) {
   );
 }
 
-// 1. Node for the global "second brain" view.
+// 1. Orb node for the global "second brain" view.
 //
-// Phase 7B: notes render as white rounded cards carrying their title and
-// space name (per the approved reference). Folder rings and the centre
-// node keep the compact dot form so the hierarchy still reads.
+// The Phase 7B pass briefly rendered notes as white rectangle cards. That
+// was reverted: the cards were ~150px wide and opaque, and because React
+// Flow paints the edge SVG *beneath* the node layer, every edge — including
+// the sage @mention links from Phase 7A — ran centre-to-centre underneath
+// the cards and was completely hidden. Small orbs restore the original
+// visual AND make the edges visible again, which is why one change fixes
+// both. The title stays as small text under the orb, with a native tooltip
+// carrying the full title + space on hover.
 function DotNode({ data }) {
-  const isNoteCard = data.variant === "card";
+  const size = data.dotSize || 10;
   return (
     <div className="flex flex-col items-center select-none relative">
       <Handle
@@ -111,26 +116,22 @@ function DotNode({ data }) {
           transform: "translate(-50%, -50%)",
         }}
       />
-      {isNoteCard ? (
-        <div className="mc-graph-node cursor-pointer transition-transform hover:scale-[1.03]">
-          <div className="mc-graph-node-title truncate">
-            {data.title || "Untitled"}
-          </div>
-          <div className="mc-graph-node-space truncate">{data.spaceName}</div>
-        </div>
-      ) : (
-        <div
-          className="rounded-full shadow-sm cursor-pointer hover:scale-110 transition-transform"
-          style={{
-            width: data.dotSize || 10,
-            height: data.dotSize || 10,
-            backgroundColor: data.color || "#8B877E",
-          }}
-        />
-      )}
-      {!isNoteCard && data.label && (
+      <div
+        title={
+          data.spaceName
+            ? `${data.title || data.label} — ${data.spaceName}`
+            : data.label
+        }
+        className="rounded-full shadow-sm cursor-pointer hover:scale-125 transition-transform"
+        style={{
+          width: size,
+          height: size,
+          backgroundColor: data.color || "#8B877E",
+        }}
+      />
+      {data.label && (
         <span
-          className="pointer-events-none mt-1 whitespace-nowrap text-[9px] text-[#8B877E]"
+          className="pointer-events-none mt-1 max-w-[120px] truncate whitespace-nowrap text-[9px] text-[#8B877E]"
           style={{ fontFamily: "Inter, sans-serif" }}
         >
           {data.label}
@@ -482,9 +483,10 @@ function GraphContent() {
           });
 
           // Ring 1 (folders)
-          // Wider rings than the pre-7B dot layout: note nodes are now
-          // ~150px cards rather than 9px dots, so they need real spacing.
-          const ring1Radius = 520;
+          // Seed radius only — the physics pass below is what actually
+          // spreads the graph. Kept generous so nodes don't all start on
+          // top of each other and need many frames to separate.
+          const ring1Radius = 420;
           const folderCount = foldersList.length;
 
           foldersList.forEach((folder, folderIdx) => {
@@ -516,7 +518,7 @@ function GraphContent() {
             // Ring 2 (notes around their respective folders)
             const folderNotes = notesList.filter((n) => n.folderId === folder.id);
             const noteCount = folderNotes.length;
-            const ring2Radius = 230;
+            const ring2Radius = 170;
 
             folderNotes.forEach((note, noteIdx) => {
               const noteAngle = (noteIdx / noteCount) * 2 * Math.PI;
@@ -528,9 +530,10 @@ function GraphContent() {
                 type: "dot",
                 position: { x: nx, y: ny },
                 data: {
-                  variant: "card",
                   label: note.title || "Untitled",
-                  color: color,
+                  // Note orbs are always sage; the folder ring keeps the
+                  // alternating palette so the hierarchy still reads.
+                  color: "#7A8E5D",
                   dotSize: 9,
                   title: note.title || "Untitled",
                   spaceName: folder.name,
@@ -635,8 +638,14 @@ function GraphContent() {
             const distSq = dx * dx + dy * dy + 0.1;
             const dist = Math.sqrt(distSq);
 
-            if (dist < 300) {
-              const force = 2500 / distSq;
+            // CLUSTERING FIX: the old values were tuned for a handful of
+            // nodes — repulsion only acted within 300px and was weak
+            // (2500/d²), so with dozens of notes the centre pull and the
+            // edge springs overwhelmed it and everything collapsed into a
+            // ball. Longer range + a much larger constant lets the graph
+            // actually occupy the canvas.
+            if (dist < 900) {
+              const force = 45000 / distSq;
               const fx = (dx / dist) * force;
               const fy = (dy / dist) * force;
 
@@ -658,8 +667,10 @@ function GraphContent() {
             const dy = posMap[vId].y - posMap[uId].y;
             const dist = Math.sqrt(dx * dx + dy * dy) || 0.1;
 
-            const desiredDist = 100;
-            const force = (dist - desiredDist) * 0.04;
+            // Longer rest length and a softer spring, so linked notes stay
+            // visibly connected without dragging the graph back into a knot.
+            const desiredDist = 190;
+            const force = (dist - desiredDist) * 0.022;
 
             const fx = (dx / dist) * force;
             const fy = (dy / dist) * force;
@@ -675,8 +686,8 @@ function GraphContent() {
         currentNodes.forEach((n) => {
           const dx = center.x - posMap[n.id].x;
           const dy = center.y - posMap[n.id].y;
-          forces[n.id].x += dx * 0.003;
-          forces[n.id].y += dy * 0.003;
+          forces[n.id].x += dx * 0.0012;
+          forces[n.id].y += dy * 0.0012;
         });
 
         const nextNodes = currentNodes.map((n) => {

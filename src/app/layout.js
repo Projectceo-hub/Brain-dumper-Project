@@ -1,5 +1,9 @@
 import { Inter } from "next/font/google";
-import { Instrument_Serif } from "next/font/google";
+import {
+  Instrument_Serif,
+  Plus_Jakarta_Sans,
+  Playfair_Display,
+} from "next/font/google";
 import AuthGate from "@/components/AuthGate";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import ThemeProvider from "@/components/ThemeProvider";
@@ -16,6 +20,18 @@ const instrumentSerif = Instrument_Serif({
   variable: "--font-instrument-serif",
   subsets: ["latin"],
   weight: "400",
+});
+
+// Alternative display faces, selectable in Settings. Only the display face
+// swaps; Inter stays the UI face for every option.
+const jakarta = Plus_Jakarta_Sans({
+  variable: "--font-jakarta",
+  subsets: ["latin"],
+});
+
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
+  subsets: ["latin"],
 });
 
 // PWA manifest + Apple web-app metadata. Next.js renders these into the
@@ -44,7 +60,7 @@ export default function RootLayout({ children }) {
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${instrumentSerif.variable} h-full antialiased`}
+      className={`${inter.variable} ${instrumentSerif.variable} ${jakarta.variable} ${playfair.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col" style={{ background: "var(--bg)" }}>
         <ThemeProvider>

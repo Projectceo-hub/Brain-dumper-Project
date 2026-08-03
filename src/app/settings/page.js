@@ -8,8 +8,11 @@ import { createClient } from "@/lib/supabase/client";
 import {
   THEMES,
   COMING_SOON_THEMES,
+  FONTS,
   getStoredTheme,
   setTheme,
+  getStoredFont,
+  setFont,
 } from "@/components/ThemeProvider";
 
 // Static hex values for the theme picker swatches. These mirror the CSS
@@ -19,8 +22,14 @@ import {
 const THEME_SWATCHES = {
   "warm-canvas": { bg: "#FFFEFB", accent: "#7A8E5D" },
   forest: { bg: "#EDE9E2", accent: "#3F5D3A" },
-  ink: { bg: "#EDE9E2", accent: "#2A2926" },
   dusk: { bg: "#EDE9E2", accent: "#6E6480" },
+};
+
+// Three-dot previews for the selectable themes: page bg, accent, text.
+// Mirrors the values in globals.css for each data-theme block.
+const THEME_PREVIEWS = {
+  "warm-canvas": ["#FFFEFB", "#7A8E5D", "#121212"],
+  ink: ["#121212", "#8CA36B", "#F2F0EC"],
 };
 
 function Field({ label, children }) {
@@ -58,9 +67,11 @@ export default function SettingsPage() {
   const [deleteError, setDeleteError] = useState("");
 
   const [theme, setThemeState] = useState("warm-canvas");
+  const [font, setFontState] = useState("default");
 
   useEffect(() => {
     setThemeState(getStoredTheme());
+    setFontState(getStoredFont());
     const supabase = createClient();
     if (!supabase) return;
     supabase.auth.getUser().then(({ data }) => {
@@ -190,6 +201,11 @@ export default function SettingsPage() {
   const pickTheme = (id) => {
     setTheme(id);
     setThemeState(id);
+  };
+
+  const pickFont = (id) => {
+    setFont(id);
+    setFontState(id);
   };
 
   const cardStyle = {
@@ -436,17 +452,18 @@ export default function SettingsPage() {
                     key={t.id}
                     type="button"
                     onClick={() => pickTheme(t.id)}
-                    className="cursor-pointer bg-white p-4 text-left"
+                    className="cursor-pointer p-4 text-left"
                     style={{
+                      background: "var(--card-bg)",
                       borderRadius: "var(--radius-panel)",
                       border: `2px solid ${active ? "var(--accent-green)" : "var(--border-1)"}`,
-                      boxShadow: "0 2px 12px rgba(0, 0, 0, 0.04)",
+                      boxShadow: "var(--shadow-card)",
                     }}
                     aria-label={`Switch to ${t.name} theme`}
                     aria-pressed={active}
                   >
                     <div className="mb-3 flex gap-2">
-                      {["#FFFEFB", "#7A8E5D", "#121212"].map((c) => (
+                      {(THEME_PREVIEWS[t.id] || []).map((c) => (
                         <span
                           key={c}
                           className="h-6 w-6 rounded-full"
@@ -471,7 +488,7 @@ export default function SettingsPage() {
                       )}
                     </div>
                     <div className="mt-1 text-[11px]" style={{ color: "var(--text-dim)" }}>
-                      Soft paper, sage accent, ink sidebar
+                      {t.blurb}
                     </div>
                   </button>
                 );
@@ -508,8 +525,9 @@ export default function SettingsPage() {
                         {t.name}
                       </span>
                       <span
-                        className="rounded-full border bg-white px-2 py-1 text-[11px]"
+                        className="rounded-full border px-2 py-1 text-[11px]"
                         style={{
+                          background: "var(--card-bg)",
                           borderColor: "var(--border-1)",
                           color: "var(--text-dim)",
                         }}
@@ -518,6 +536,76 @@ export default function SettingsPage() {
                       </span>
                     </div>
                   </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* ----------------------------- Font ----------------------------- */}
+        <section className="mt-12 max-w-3xl">
+          <h2 className="mc-section-label mb-3 uppercase">Font</h2>
+          <div className="p-5" style={cardStyle}>
+            <p
+              className="font-sans text-sm mb-4"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              Changes the display face used for headings and note titles. Inter
+              stays the interface font in every option.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {FONTS.map((f) => {
+                const active = font === f.id;
+                const previewFace =
+                  f.id === "modern"
+                    ? "var(--font-jakarta)"
+                    : f.id === "classic"
+                      ? "var(--font-playfair)"
+                      : "var(--font-instrument-serif)";
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => pickFont(f.id)}
+                    className="cursor-pointer p-4 text-left"
+                    style={{
+                      borderRadius: "var(--radius-panel)",
+                      border: `2px solid ${active ? "var(--accent-green)" : "var(--border-1)"}`,
+                      background: "var(--card-bg)",
+                      boxShadow: "var(--shadow-card)",
+                    }}
+                    aria-label={`Use the ${f.name} font`}
+                    aria-pressed={active}
+                  >
+                    <div
+                      className="text-[26px] leading-none"
+                      style={{ fontFamily: previewFace, color: "var(--text-strong)" }}
+                    >
+                      Ag
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-2">
+                      <span
+                        className="text-[14px] font-medium"
+                        style={{ color: "var(--text-strong)" }}
+                      >
+                        {f.name}
+                      </span>
+                      {active && (
+                        <span
+                          className="rounded-full px-2 py-1 text-[11px] text-white"
+                          style={{ background: "var(--accent-green)" }}
+                        >
+                          Active
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      className="mt-1 text-[11px]"
+                      style={{ color: "var(--text-dim)" }}
+                    >
+                      {f.blurb}
+                    </div>
+                  </button>
                 );
               })}
             </div>

@@ -1,33 +1,110 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUp, FolderOpen, ChevronRight } from "lucide-react";
+import { FolderOpen, ChevronRight, X } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import {
   hasAnyFolders,
   getFoldersForDashboard,
   seedFoldersForProfile,
-  createNote,
-  createNotesFromTree,
   getNotesInFolder,
   getAllNotesWithFolders,
-  getOrCreateQuickNotesFolder,
-  saveEntities,
-  retryPendingSync
+  retryPendingSync,
+  getAllNoteLinks
 } from "@/lib/db";
 
-// sessionStorage keys for capsule input persistence across tab switches.
-const CAPSULE_TEXT_KEY = "mindcanvas:capsule-text";
 
-function getStoredCapsuleText() {
-  if (typeof window === "undefined") return "";
+// ---------------------------------------------------------------------------
+// Daily digest
+// ---------------------------------------------------------------------------
+// Dismissal is remembered for 24 hours, then the card comes back.
+const DIGEST_DISMISSED_KEY = "mindcanvas:digest-dismissed-at";
+const DIGEST_DISMISS_MS = 24 * 60 * 60 * 1000;
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+function isDigestDismissed() {
+  if (typeof window === "undefined") return false;
   try {
-    return window.sessionStorage.getItem(CAPSULE_TEXT_KEY) || "";
+    const raw = window.localStorage.getItem(DIGEST_DISMISSED_KEY);
+    if (!raw) return false;
+    return Date.now() - Number(raw) < DIGEST_DISMISS_MS;
   } catch {
-    return "";
+    return false;
   }
+}
+
+// Builds at most 3 digest items from data already in Dexie. Every item is
+// derived from a real field — there are no scores or invented metrics.
+//
+//   a) UNFINISHED — touched in the last 7 days, body under 100 chars
+//   b) REVISIT    — a substantive note (>=100 chars) untouched for 7+ days
+//   c) FOLLOW UP  — a note mentioned by 3 or more *different* notes
+//
+// One item per category is preferred so the card reads as a summary rather
+// than a list of near-duplicates.
+function buildDigestItems(allNotes, noteLinks) {
+  const now = Date.now();
+  const items = [];
+  const ts = (n) => new Date(n.updatedAt).getTime() || 0;
+
+  const recent = allNotes
+    .filter((n) => now - ts(n) < SEVEN_DAYS_MS)
+    .filter((n) => (n.body || "").trim().length < 100)
+    .sort((a, b) => ts(b) - ts(a));
+  if (recent[0]) {
+    items.push({
+      key: `unfinished-${recent[0].id}`,
+      label: "Unfinished",
+      title: recent[0].title || "Untitled",
+      spaceName: recent[0].folderName,
+      noteId: recent[0].id,
+      folderId: recent[0].folderId,
+    });
+  }
+
+  const stale = allNotes
+    .filter((n) => now - ts(n) >= SEVEN_DAYS_MS)
+    .filter((n) => (n.body || "").trim().length >= 100)
+    .sort((a, b) => ts(b) - ts(a));
+  if (stale[0]) {
+    items.push({
+      key: `revisit-${stale[0].id}`,
+      label: "Revisit",
+      title: stale[0].title || "Untitled",
+      spaceName: stale[0].folderName,
+      noteId: stale[0].id,
+      folderId: stale[0].folderId,
+    });
+  }
+
+  // Count how many DISTINCT notes mention each target.
+  const mentionSources = new Map();
+  for (const link of noteLinks || []) {
+    if (!link?.target_note_id || !link?.source_note_id) continue;
+    const t = String(link.target_note_id);
+    if (!mentionSources.has(t)) mentionSources.set(t, new Set());
+    mentionSources.get(t).add(String(link.source_note_id));
+  }
+  const hot = [...mentionSources.entries()]
+    .filter(([, sources]) => sources.size >= 3)
+    .sort((a, b) => b[1].size - a[1].size);
+  for (const [targetId] of hot) {
+    const note = allNotes.find((n) => String(n.id) === targetId);
+    if (!note) continue;
+    items.push({
+      key: `followup-${note.id}`,
+      label: "Follow up",
+      title: note.title || "Untitled",
+      spaceName: note.folderName,
+      noteId: note.id,
+      folderId: note.folderId,
+    });
+    break;
+  }
+
+  return items.slice(0, 3);
 }
 
 function getRelativeTimeString(date) {
@@ -51,64 +128,12 @@ export default function Dashboard() {
   const [noteCounts, setNoteCounts] = useState({});
   const [recentNotes, setRecentNotes] = useState([]);
   const [showAllSpaces, setShowAllSpaces] = useState(false);
+  const [digestItems, setDigestItems] = useState([]);
+  const [digestDismissed, setDigestDismissed] = useState(isDigestDismissed);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState("work");
 
-  const [capsuleState, setCapsuleState] = useState("collapsed");
-  // Height of the expanded capsule (in px). Initial 48 matches the pill
-  // resting height used by every setCapsuleHeight(48) reset call below.
-  // Measured live by resizeCapsule() whenever inputText or capsuleState
-  // changes (see the effect below).
-  const [capsuleHeight, setCapsuleHeight] = useState(48);
-  // On mount, hydrate capsule text from sessionStorage (Phase 2c — preserve
-  // typed text across reloads / tab switches). Clearing happens after
-  // successful note submission, not here.
-  const [inputText, setInputText] = useState(getStoredCapsuleText);
-  const [apiLoading, setApiLoading] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
-  const textareaRef = useRef(null);
-  const debounceTimerRef = useRef(null);
-
-  // Debounced write to sessionStorage — 300ms after the user stops typing.
-  // Per the spec, this is only for the capsule textarea, not note editor
-  // content (which autosaves to Supabase via the folder page).
-  useEffect(() => {
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    debounceTimerRef.current = setTimeout(() => {
-      try {
-        if (typeof window === "undefined") return;
-        if (inputText.trim()) {
-          window.sessionStorage.setItem(CAPSULE_TEXT_KEY, inputText);
-        } else {
-          window.sessionStorage.removeItem(CAPSULE_TEXT_KEY);
-        }
-      } catch {
-        // ignore write failures
-      }
-    }, 300);
-
-    // Immediate flush when the tab becomes hidden — bypasses the 300ms
-    // debounce so the user's in-progress text is preserved even if they
-    // switch tabs mid-keystroke. Fires on visibilitychange ONLY when
-    // transitioning to "hidden" (not on return).
-    const flushOnHide = () => {
-      if (document.visibilityState === "hidden") {
-        try {
-          if (inputText.trim()) {
-            window.sessionStorage.setItem(CAPSULE_TEXT_KEY, inputText);
-          }
-        } catch {
-          // ignore
-        }
-      }
-    };
-    document.addEventListener("visibilitychange", flushOnHide);
-
-    return () => {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-      document.removeEventListener("visibilitychange", flushOnHide);
-    };
-  }, [inputText]);
 
   const loadData = async () => {
     try {
@@ -138,6 +163,16 @@ export default function Dashboard() {
         .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
         .slice(0, 5);
       setRecentNotes(recent);
+
+      // Digest reuses the notes already fetched above plus the locally
+      // cached note_links — no additional Supabase traffic.
+      let links = [];
+      try {
+        links = await getAllNoteLinks();
+      } catch {
+        links = [];
+      }
+      setDigestItems(buildDigestItems(allNotes, links));
     } catch (err) {
       console.error("Failed to load dashboard data:", err);
     } finally {
@@ -153,96 +188,19 @@ export default function Dashboard() {
     return () => clearTimeout(timer);
   }, []);
 
-  const resizeCapsule = useCallback(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    const maxPx = Math.floor(window.innerHeight * 0.45);
-    const next = Math.min(Math.max(el.scrollHeight + 2, 24), maxPx);
-    setCapsuleHeight(next);
-    el.style.height = `${next}px`;
-  }, []);
-
-  useEffect(() => {
-    if (capsuleState !== "collapsed") {
-      resizeCapsule();
+  const handleDismissDigest = () => {
+    setDigestDismissed(true);
+    try {
+      window.localStorage.setItem(DIGEST_DISMISSED_KEY, String(Date.now()));
+    } catch {
+      // Non-fatal: the card simply reappears on the next load.
     }
-  }, [inputText, capsuleState, resizeCapsule]);
+  };
 
   const handleOnboarding = async () => {
     setLoading(true);
     await seedFoldersForProfile(selectedProfile);
     await loadData();
-  };
-
-  const handleOptionSelect = async (action) => {
-    if (action === "new-note") {
-      const body = inputText.trim();
-      if (!body) return;
-
-      const quickNotesFolderId = await getOrCreateQuickNotesFolder();
-      await createNote(quickNotesFolderId, "", body);
-      // Clear persisted capsule text after successful submission (Phase 2c).
-      try {
-        if (typeof window !== "undefined") {
-          window.sessionStorage.removeItem(CAPSULE_TEXT_KEY);
-        }
-      } catch {
-        // ignore
-      }
-      setCapsuleState("collapsed");
-      setInputText("");
-      setCapsuleHeight(48);
-      router.push(`/folder/${quickNotesFolderId}`);
-      return;
-    }
-
-    if (folders.length === 0) return;
-    const targetFolderId = folders[0].id;
-
-    if (action === "second-brain") {
-      setCapsuleState("collapsed");
-      setInputText("");
-      setCapsuleHeight(48);
-      router.push("/graph");
-    } else if (action === "ai-organize") {
-      if (!inputText.trim()) return;
-      setApiLoading(true);
-      try {
-        const res = await fetch("/api/organize", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: inputText }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.tree) {
-            await createNotesFromTree(targetFolderId, data.tree);
-            if (Array.isArray(data.entities) && data.entities.length > 0) {
-              await saveEntities(data.entities);
-            }
-            await loadData();
-            // AI-organized output consumed the capsule text — clear persistence.
-            try {
-              if (typeof window !== "undefined") {
-                window.sessionStorage.removeItem(CAPSULE_TEXT_KEY);
-              }
-            } catch {
-              // ignore
-            }
-            setCapsuleState("collapsed");
-            setInputText("");
-            setCapsuleHeight(48);
-          }
-        } else {
-          console.error("API failed to organize");
-        }
-      } catch (err) {
-        console.error("AI Organize error:", err);
-      } finally {
-        setApiLoading(false);
-      }
-    }
   };
 
   const handleRetrySync = async () => {
@@ -316,9 +274,6 @@ export default function Dashboard() {
   const hasMoreSpaces = folders.length > 7;
   const totalNotes = Object.values(noteCounts).reduce((sum, n) => sum + n, 0);
 
-  const capsuleExpanded = capsuleState !== "collapsed";
-  const capsuleRadius = capsuleHeight > 56 ? "22px" : "9999px";
-
   return (
     <div className="flex min-h-screen" style={{ background: "var(--bg-primary)" }}>
       <Sidebar />
@@ -347,14 +302,82 @@ export default function Dashboard() {
           </button>
         </header>
 
+        {/* ---------------------------- DAILY DIGEST -------------------------- */}
+        {/* Rendered only when there is something real to surface, so it never
+            appears as an empty placeholder card. */}
+        {!digestDismissed && digestItems.length > 0 && (
+          <div
+            className="stagger-item mb-4 p-6"
+            style={{
+              background: "var(--card-bg)",
+              borderRadius: "var(--radius-card)",
+              border: "1px solid var(--border-1)",
+              boxShadow: "var(--shadow-card)",
+            }}
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <h2
+                className="mc-display text-[20px] leading-tight"
+                style={{ color: "var(--text-strong)" }}
+              >
+                Today for you
+              </h2>
+              <button
+                type="button"
+                onClick={handleDismissDigest}
+                aria-label="Dismiss digest"
+                className="shrink-0 transition-colors"
+                style={{ color: "var(--text-dim)" }}
+              >
+                <X size={16} strokeWidth={1.8} />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              {digestItems.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() =>
+                    router.push(`/folder/${item.folderId}?note=${item.noteId}`)
+                  }
+                  className="flex w-full items-baseline gap-3 text-left"
+                >
+                  <span
+                    className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.1em]"
+                    style={{ color: "var(--accent-green)" }}
+                  >
+                    {item.label}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className="block truncate text-[14px]"
+                      style={{ color: "var(--text-strong)" }}
+                    >
+                      {item.title}
+                    </span>
+                  </span>
+                  <span
+                    className="shrink-0 text-[11px]"
+                    style={{ color: "var(--text-dim)" }}
+                  >
+                    {item.spaceName}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ---------------------------- HERO SPACE ---------------------------- */}
         {hero && (
           <div
-            className="stagger-item mb-8 bg-white p-6"
+            className="stagger-item mb-8 p-6"
             style={{
+              background: "var(--card-bg)",
               borderRadius: "var(--radius-card)",
               border: "1px solid var(--border-1)",
-              boxShadow: "0 2px 12px rgba(0, 0, 0, 0.04)",
+              boxShadow: "var(--shadow-card)",
             }}
           >
             <div className="mb-4 flex items-center justify-between">
@@ -473,112 +496,6 @@ export default function Dashboard() {
             </div>
           </section>
         )}
-
-        {capsuleState === "options" && (
-          <div
-            className="fixed inset-0 z-40 bg-black/30 transition-opacity duration-200"
-            onClick={() => setCapsuleState("input")}
-          />
-        )}
-
-        {/* Desktop capture pill. On mobile the sage FAB in the nav shell is
-            the capture affordance (matching the two mockups), so this is
-            hidden below lg to avoid two competing capture controls. */}
-        <div className="fixed bottom-6 left-1/2 z-50 hidden -translate-x-1/2 flex-col items-center lg:left-[calc(50%+140px)] lg:flex">
-          {capsuleState === "options" && (
-            <div className="flex flex-col gap-2 items-center mb-3">
-              {(() => {
-                // Build the visible options list first so we can stagger
-                // them with a flat 30ms index regardless of which are shown.
-                const opts = [];
-                let idx = 0;
-                if (inputText.trim()) {
-                  opts.push(
-                    <button
-                      key="ai-organize"
-                      onClick={() => handleOptionSelect("ai-organize")}
-                      disabled={apiLoading}
-                      className="option-item mc-btn-primary whitespace-nowrap px-6 py-3 shadow-md disabled:opacity-50"
-                      style={{ animationDelay: `${idx++ * 30}ms` }}
-                    >
-                      {apiLoading ? "Organizing with AI..." : "Organize with AI"}
-                    </button>
-                  );
-                }
-                opts.push(
-                  <button
-                    key="new-note"
-                    onClick={() => handleOptionSelect("new-note")}
-                    disabled={!inputText.trim()}
-                    className="option-item mc-btn-primary whitespace-nowrap px-6 py-3 shadow-md disabled:opacity-50"
-                    style={{ animationDelay: `${idx++ * 30}ms` }}
-                  >
-                    New note
-                  </button>
-                );
-                opts.push(
-                  <button
-                    key="second-brain"
-                    onClick={() => handleOptionSelect("second-brain")}
-                    className="option-item mc-btn-secondary whitespace-nowrap px-6 py-3 shadow-md"
-                    style={{ animationDelay: `${idx++ * 30}ms` }}
-                  >
-                    Second brain
-                  </button>
-                );
-                return opts;
-              })()}
-            </div>
-          )}
-
-          {!capsuleExpanded && (
-            <button
-              onClick={() => setCapsuleState("input")}
-              className="flex h-9 w-16 items-center justify-center rounded-full border transition-all active:scale-[0.95]" style={{ background: "var(--card-bg)", borderColor: "var(--border-1)", boxShadow: "var(--shadow-capture)" }}
-            >
-              <div className="h-0.5 w-5 rounded-full" style={{ background: "var(--text-dim-2)" }} />
-            </button>
-          )}
-
-          {capsuleExpanded && (
-            <div
-              className="flex items-end gap-2 border px-4 py-2 animate-expand-bounce"
-              style={{
-                width: "min(90vw, 400px)",
-                minHeight: "56px",
-                background: "var(--card-bg)",
-                borderColor: "var(--border-1)",
-                boxShadow: "var(--shadow-capture)",
-                maxHeight: "45vh",
-                borderRadius: capsuleRadius,
-                transition: "border-radius 200ms ease, height 200ms ease, max-height 200ms ease",
-              }}
-            >
-              <textarea
-                ref={textareaRef}
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder="Dump your thoughts..."
-                rows={1}
-                className="themed-placeholder max-h-[45vh] flex-1 resize-none overflow-y-auto border-none bg-transparent py-1 text-[14px] leading-relaxed outline-none"
-                style={{ height: `${capsuleHeight}px`, color: "var(--text-strong)" }}
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && inputText.trim()) {
-                    e.preventDefault();
-                    setCapsuleState("options");
-                  }
-                }}
-              />
-              <button
-                onClick={() => setCapsuleState("options")}
-                className="mc-fab mb-0.5 h-9 w-9 shrink-0 transition-transform active:scale-[0.9]" style={{ boxShadow: "none" }}
-              >
-                <ArrowUp size={18} strokeWidth={1.8} />
-              </button>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

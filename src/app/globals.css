@@ -70,6 +70,74 @@
      stay consistent with the active theme's --bg / --text-primary. */
   --background: #FFFEFB;
   --foreground: #121212;
+
+  /* Display face. Overridden by the [data-font] blocks below; everything
+     that shows a heading reads this one variable. */
+  --font-display: var(--font-instrument-serif);
+}
+
+/* ------------------------------------------------------------------ */
+/* Font options — driven by data-font on <html>, same pattern as       */
+/* data-theme. Only the DISPLAY face changes; Inter stays the UI face. */
+/* ------------------------------------------------------------------ */
+[data-font="modern"] {
+  --font-display: var(--font-jakarta);
+}
+[data-font="classic"] {
+  --font-display: var(--font-playfair);
+}
+
+/* ------------------------------------------------------------------ */
+/* INK — the real dark theme.                                          */
+/* Chosen over Forest/Dusk because it is the only neutral near-black    */
+/* palette of the three; the other two are mid-tone hues that would    */
+/* not give usable dark surfaces. Every 7B token is redefined here, so  */
+/* components reading the raw tokens flip over cleanly.                 */
+/* ------------------------------------------------------------------ */
+[data-theme="ink"] {
+  --bg-primary: #121212;
+  --bg-secondary: #171717;
+  --bg-neutral-100: #1E1E1E;
+  --bg-neutral-200: #232323;
+  --bg-neutral-300: #2A2A2A;
+  --dark-surface: #0B0B0B;
+  --dark-surface-2: #1E1E1E;
+
+  /* Sage lifted slightly so it keeps contrast against near-black. */
+  --accent-green: #8CA36B;
+  --accent-green-hover: #9BB179;
+  --accent-green-muted: #232A1B;
+
+  --text-strong: #F2F0EC;
+  --text-body: #DAD7D1;
+  --text-body-2: #C4C0B9;
+  --text-dim: #908B81;
+  --text-dim-2: #6E6A63;
+
+  --border-1: #2A2A2A;
+  --border-2: #232323;
+  --card-bg: #171717;
+
+  --shadow-card: 0 2px 16px rgba(0, 0, 0, 0.4);
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-capture: 0 12px 40px rgba(0, 0, 0, 0.6);
+
+  --bg: #121212;
+  --surface: #171717;
+  --surface-solid: #171717;
+  --text-primary: #F2F0EC;
+  --text-secondary: #DAD7D1;
+  --text-muted: #908B81;
+  --accent: #8CA36B;
+  --accent-secondary: #9BB179;
+  --sidebar-bg: #0B0B0B;
+  --sidebar-text: #FFFFFF;
+  --sidebar-text-muted: rgba(255, 255, 255, 0.6);
+  --border: #2A2A2A;
+  --card-hover: #1E1E1E;
+
+  --background: #121212;
+  --foreground: #F2F0EC;
 }
 
 /* Phase 7B: the dark-studio / midnight / sepia / slate palettes were
@@ -112,9 +180,9 @@
   --color-hair: #E9E6E1;
   --color-hair-2: #EDE9E2;
 
-  /* Typography — Instrument Serif is the 7B display face. */
-  --font-serif: var(--font-instrument-serif);
-  --font-display: var(--font-instrument-serif);
+  /* Typography. `font-serif` resolves through --font-display so the
+     Settings font picker swaps every heading in one place. */
+  --font-serif: var(--font-display);
   --font-sans: var(--font-inter);
 }
 
@@ -213,72 +281,6 @@ body {
 .stagger-item {
   opacity: 0;
   animation: stagger-rise 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-/* ------------------------------------------------------------------ */
-/* Capsule input animations                                            */
-/* ------------------------------------------------------------------ */
-
-@keyframes expand-bounce {
-  0% {
-    scale: 0.75;
-    opacity: 0.8;
-  }
-  50% {
-    scale: 1.08;
-    opacity: 1;
-  }
-  75% {
-    scale: 0.97;
-  }
-  100% {
-    scale: 1;
-    opacity: 1;
-  }
-}
-
-.animate-expand-bounce {
-  animation: expand-bounce 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-  transform-origin: bottom center;
-}
-
-/*
- * Capsule collapse: quick fade + scale back to pill shape. Spec: 150ms.
- */
-@keyframes collapse-pill {
-  from {
-    opacity: 1;
-    transform: scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: scale(0.92);
-  }
-}
-
-.animate-collapse-pill {
-  animation: collapse-pill 150ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
-  transform-origin: bottom center;
-}
-
-/*
- * Options menu entry: each item slides in from below with a 30ms stagger
- * and ease-out. Spec: 30ms stagger, ease-out.
- */
-@keyframes option-slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.option-item {
-  opacity: 0;
-  animation: option-slide-up 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* ------------------------------------------------------------------ */
@@ -549,9 +551,6 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .route-enter,
   .stagger-item,
-  .animate-expand-bounce,
-  .animate-collapse-pill,
-  .option-item,
   .animate-slide-in-right,
   .sidebar-indicator,
   .graph-node-enter {
@@ -597,7 +596,7 @@ body {
 /* ================================================================== */
 
 .mc-display {
-  font-family: var(--font-instrument-serif), ui-serif, Georgia, serif;
+  font-family: var(--font-display), ui-serif, Georgia, serif;
   font-weight: 500;
   letter-spacing: -0.01em;
 }
@@ -699,7 +698,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: #fff;
+  background: var(--card-bg);
   color: var(--text-strong);
   border: 1px solid var(--border-1);
   border-radius: var(--radius-button);
@@ -767,7 +766,7 @@ body {
 /* --- Mobile bottom nav (4 items) ----------------------------------- */
 .mc-bottomnav {
   height: var(--bottomnav-h);
-  background: #fff;
+  background: var(--card-bg);
   border-top: 1px solid var(--border-1);
 }
 .mc-bottomnav-item {
@@ -824,28 +823,9 @@ body {
   line-height: 1;
 }
 
-/* --- Graph: white node cards on the dark canvas -------------------- */
-.mc-graph-node {
-  background: #fff;
-  border: 1px solid var(--border-1);
-  border-radius: 16px;
-  padding: 12px 14px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-  min-width: 120px;
-  max-width: 190px;
-  text-align: left;
-}
-.mc-graph-node-title {
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.2;
-  color: var(--text-strong);
-}
-.mc-graph-node-space {
-  font-size: 11px;
-  color: var(--text-dim);
-  margin-top: 4px;
-}
+/* --- Graph: node preview panel -------------------------------------
+ * The white node-card classes that lived here were removed with the orb
+ * revert; opaque cards hid the edge layer beneath them. */
 .mc-graph-panel {
   background: #fff;
   border: 1px solid var(--border-1);
@@ -882,9 +862,10 @@ body {
 .mc-dropzone {
   border: 2px dashed var(--border-1);
   border-radius: var(--radius-card);
-  background: #fff;
+  background: var(--card-bg);
   padding: 24px;
   text-align: center;
   transition: border-color 150ms ease, background 150ms ease;
 }
 .mc-dropzone:hover { border-color: var(--accent-green); }
+
