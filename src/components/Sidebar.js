@@ -22,6 +22,7 @@ import {
   getOrCreateQuickNotesFolder,
 } from "@/lib/db";
 import { createClient } from "@/lib/supabase/client";
+import { AskAiTrigger } from "@/components/NoteChat";
 
 // Phase 7B navigation shell.
 //
@@ -264,6 +265,9 @@ export default function Sidebar({ activeFolderId = null }) {
           <Download {...ICON} />
           Import
         </Link>
+        {/* Opens the NoteChat panel mounted in layout.js. Not a route, so it
+            carries no data-active state. */}
+        <AskAiTrigger onNavigate={() => setMobileOpen(false)} />
         <Link
           href="/settings"
           onClick={() => setMobileOpen(false)}

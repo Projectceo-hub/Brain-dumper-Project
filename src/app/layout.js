@@ -5,6 +5,7 @@ import {
   Playfair_Display,
 } from "next/font/google";
 import AuthGate from "@/components/AuthGate";
+import NoteChat from "@/components/NoteChat";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import ThemeProvider from "@/components/ThemeProvider";
 import "./globals.css";
@@ -65,6 +66,11 @@ export default function RootLayout({ children }) {
       <body className="min-h-full flex flex-col" style={{ background: "var(--bg)" }}>
         <ThemeProvider>
           <AuthGate>{children}</AuthGate>
+          {/* Mounted outside AuthGate so navigating between routes never
+              remounts it and drops an open thread. It renders nothing until
+              opened, and the only thing that opens it is the sidebar
+              trigger — which itself only exists once signed in. */}
+          <NoteChat />
         </ThemeProvider>
         <ServiceWorkerRegistrar />
       </body>
