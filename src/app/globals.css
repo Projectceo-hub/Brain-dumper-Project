@@ -858,6 +858,26 @@ body {
 }
 .mc-input:focus { border-color: var(--accent-green); }
 
+/* --- Global search result row (Phase 11) --------------------------- */
+.mc-search-row {
+  transition: background 120ms ease;
+}
+.mc-search-row:hover {
+  background: var(--bg-neutral-100);
+}
+
+/* --- Backlinks panel (Phase 11) ------------------------------------ */
+.mc-backlink-row {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 12px;
+  transition: background 120ms ease;
+}
+.mc-backlink-row:hover {
+  background: var(--bg-neutral-100);
+}
+
 /* --- Dropzone (import) --------------------------------------------- */
 .mc-dropzone {
   border: 2px dashed var(--border-1);

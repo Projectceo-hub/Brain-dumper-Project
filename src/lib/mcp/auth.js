@@ -88,13 +88,47 @@ export async function revokeToken(userId, tokenId) {
 }
 
 /**
- * Verify an Authorization: Bearer <token> header value against the stored
- * api_tokens table. Returns the owning user_id on success, or null if the
- * token is missing, revoked, or unknown. Also bumps last_used_at on success.
+ * Resolve an OAuth access token issued by our own oidc-provider.
+ *
+ * Tokens minted by the OAuth flow live in the oidc_models store, NOT in
+ * api_tokens, so the hash lookup below can never match one. That was the
+ * central defect: a client could complete the entire OAuth handshake, receive
+ * a perfectly valid token, present it, and be told 401 — which reads as an
+ * endless reconnect loop in Claude's UI.
+ *
+ * The provider module is imported lazily so the (heavy) oidc-provider
+ * dependency is only loaded when a personal API token did not match.
+ */
+async function resolveUserFromOAuthToken(rawToken, issuer) {
+  if (!issuer) return null;
+  try {
+    const { getProvider } = await import("@/lib/oauth/provider");
+    const provider = await getProvider(issuer);
+    const accessToken = await provider.AccessToken.find(rawToken);
+    if (!accessToken) return null;
+    if (accessToken.isExpired) return null;
+    return accessToken.accountId || null;
+  } catch (err) {
+    console.warn("OAuth access token lookup failed:", err?.message || err);
+    return null;
+  }
+}
+
+/**
+ * Verify an Authorization: Bearer <token> header value.
+ *
+ * Accepts BOTH credential types this server issues:
+ *   1. a personal API token from Settings → API tokens (api_tokens table)
+ *   2. an OAuth access token from the MCP connector flow (oidc_models)
+ *
+ * Returns the owning user_id on success, or null if the token is missing,
+ * revoked, expired, or unknown. Bumps last_used_at for personal tokens.
+ *
+ * `issuer` is the request origin, required only to resolve OAuth tokens.
  *
  * NEVER returns a token row — only the validated user_id.
  */
-export async function resolveUserFromBearer(authHeader) {
+export async function resolveUserFromBearer(authHeader, issuer = null) {
   if (!authHeader || typeof authHeader !== "string") return null;
   const match = authHeader.match(/^Bearer\s+(.+)$/i);
   if (!match) return null;
@@ -112,15 +146,19 @@ export async function resolveUserFromBearer(authHeader) {
     .eq("token_hash", tokenHash)
     .maybeSingle();
 
-  if (error || !data) return null;
-  if (data.revoked_at) return null;
+  if (!error && data && !data.revoked_at) {
+    await supabase
+      .from("api_tokens")
+      .update({ last_used_at: new Date().toISOString() })
+      .eq("id", data.id);
+    return data.user_id;
+  }
 
-  await supabase
-    .from("api_tokens")
-    .update({ last_used_at: new Date().toISOString() })
-    .eq("id", data.id);
+  // A revoked personal token must stay revoked — don't fall through to the
+  // OAuth path and give it a second chance at authenticating.
+  if (data && data.revoked_at) return null;
 
-  return data.user_id;
+  return resolveUserFromOAuthToken(rawToken, issuer);
 }
 
 export { isServiceRoleConfigured };

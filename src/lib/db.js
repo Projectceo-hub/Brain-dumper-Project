@@ -48,6 +48,25 @@ db.version(4).stores({
   note_links: "id, source_note_id, target_note_id, created_at",
 });
 
+// Phase 11: chat_history persists the "Ask your notes" thread across panel
+// opens. A new store cannot be added to an already-installed version — every
+// existing device is on v4 — so this is a +1 bump carrying v4's stores
+// forward unchanged. Dexie migrates in place; no data is dropped.
+//
+// Local-only by design: there is no remote chat_history table and no
+// syncQueue entry is written for it, so a thread never leaves the device.
+db.version(5).stores({
+  folders: "id, userId, name, createdAt, updatedAt, syncStatus",
+  notes:
+    "id, userId, folderId, parentNoteId, title, body, createdAt, updatedAt, syncStatus",
+  syncQueue:
+    "++id, userId, table, recordId, action, createdAt, updatedAt, attempts",
+  meta: "key",
+  entities: "id, userId, name, type, sourceNoteId, createdAt",
+  note_links: "id, source_note_id, target_note_id, created_at",
+  chat_history: "id",
+});
+
 export default db;
 
 let activeUserId = null;
@@ -813,6 +832,79 @@ async function mergeRemoteNoteLinks(userId, remoteLinks) {
     await db.note_links.put(fromRemoteNoteLink(link));
   }
 }
+
+// ---------------------------------------------------------------------------
+// Chat history (Phase 11 — persisted "Ask your notes" thread)
+// ---------------------------------------------------------------------------
+// One row, keyed "global", holding the last CHAT_HISTORY_LIMIT messages.
+// Every helper swallows its own errors: a chat panel must never fail to open
+// because IndexedDB is unavailable (private browsing, quota, blocked origin).
+
+const CHAT_HISTORY_KEY = "global";
+const CHAT_HISTORY_LIMIT = 50;
+
+export async function getChatHistory() {
+  try {
+    const row = await db.chat_history.get(CHAT_HISTORY_KEY);
+    if (!row || !Array.isArray(row.messages)) return [];
+    return row.messages.slice(-CHAT_HISTORY_LIMIT);
+  } catch (err) {
+    console.warn("Could not read chat history:", err);
+    return [];
+  }
+}
+
+export async function saveChatHistory(messages) {
+  try {
+    await db.chat_history.put({
+      id: CHAT_HISTORY_KEY,
+      messages: (messages || []).slice(-CHAT_HISTORY_LIMIT),
+      updatedAt: new Date(),
+    });
+  } catch (err) {
+    console.warn("Could not save chat history:", err);
+  }
+}
+
+export async function clearChatHistory() {
+  try {
+    await db.chat_history.delete(CHAT_HISTORY_KEY);
+  } catch (err) {
+    console.warn("Could not clear chat history:", err);
+  }
+}
+
+// Backlinks read straight from the local mirror so they work offline and
+// reflect a link the moment it is created, before it has synced. Returns
+// notes that link TO noteId, newest link first.
+export async function getBacklinks(noteId) {
+  if (!noteId) return [];
+  const id = String(noteId);
+
+  const links = await db.note_links.where("target_note_id").equals(id).toArray();
+  links.sort((a, b) => toDate(b.created_at) - toDate(a.created_at));
+
+  const seen = new Set();
+  const out = [];
+  for (const link of links) {
+    const sourceId = String(link.source_note_id);
+    if (seen.has(sourceId)) continue;
+    seen.add(sourceId);
+    // getNoteById enforces the userId check, so a stale local row can never
+    // surface another user's note.
+    const note = await getNoteById(sourceId);
+    if (!note) continue;
+    out.push({
+      id: note.id,
+      title: note.title || "Untitled",
+      snippet: (note.body || "").replace(MENTION_TOKEN_RE, "@$1").slice(0, 80),
+    });
+  }
+  return out;
+}
+
+// Mentions are stored inline as `@[id|title]`; show the title only.
+const MENTION_TOKEN_RE = /@\[[^\]|]+\|([^\]]*)\]/g;
 
 export async function getNoteById(noteId) {
   const note = await db.notes.get(String(noteId));

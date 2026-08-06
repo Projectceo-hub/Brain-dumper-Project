@@ -66,6 +66,14 @@ async function handleRequest(request) {
     headers: Object.fromEntries(
       [...request.headers.entries()].map(([k, v]) => [k.toLowerCase(), v]),
     ),
+    // Koa reads req.socket for ctx.ip and, when no X-Forwarded-Proto is
+    // present, for ctx.protocol. Without it those getters throw on a plain
+    // object. `encrypted` mirrors the original request's scheme so local
+    // http and deployed https both resolve correctly.
+    socket: {
+      encrypted: new URL(request.url).protocol === "https:",
+      remoteAddress: "127.0.0.1",
+    },
     // Provide a proper Node.js Readable for oidc-provider/body-parser:
     readable: true,
     readableLength: 0,
@@ -81,33 +89,54 @@ async function handleRequest(request) {
     // Koa will read req for 'data'/'end' events when chunky:
   };
 
+  // `statusCode` must be a real writable property: Koa sets the response
+  // status by assigning res.statusCode directly, and only falls back to
+  // writeHead in some paths. The previous shape stored status solely in
+  // _statusCode, so any status Koa set this way was discarded and every
+  // response would have gone out as 200.
   const fakeRes = {
-    _statusCode: 200,
+    statusCode: 200,
+    headersSent: false,
+    writableEnded: false,
+    finished: false,
     _headers: {},
     _bodyChunks: [],
     setHeader(name, value) {
       this._headers[name.toLowerCase()] = value;
+      return this;
     },
     getHeader(name) {
       return this._headers[name.toLowerCase()];
+    },
+    getHeaderNames() {
+      return Object.keys(this._headers);
+    },
+    hasHeader(name) {
+      return name.toLowerCase() in this._headers;
     },
     removeHeader(name) {
       delete this._headers[name.toLowerCase()];
     },
     writeHead(code, headers = {}) {
-      this._statusCode = code;
+      this.statusCode = code;
       Object.assign(this._headers, headers);
+      return this;
     },
+    flushHeaders() {},
     write(chunk) {
-      if (chunk) this._bodyChunks.push(chunk);
+      if (chunk) this._bodyChunks.push(Buffer.from(chunk));
+      return true;
     },
     end(chunk) {
-      if (chunk) this._bodyChunks.push(chunk);
+      if (chunk) this._bodyChunks.push(Buffer.from(chunk));
+      this.writableEnded = true;
+      this.finished = true;
     },
-    once() {},
-    on() {},
-    emit() {},
-    get finished() { return false; },
+    once() { return this; },
+    on() { return this; },
+    off() { return this; },
+    removeListener() { return this; },
+    emit() { return false; },
     _finalize() {
       let body = null;
       if (this._bodyChunks.length > 0) {
@@ -117,35 +146,38 @@ async function handleRequest(request) {
       for (const [k, v] of Object.entries(this._headers)) {
         if (v !== undefined) headers[k] = v;
       }
-      return { status: this._statusCode, body, headers };
+      return { status: this.statusCode, body, headers };
     },
   };
 
-  return new Promise((resolve, reject) => {
-    try {
-      // provider.callback() returns the classic Koa (req, res) handler.
-      const handler = provider.callback();
+  // provider.callback() returns Koa's (req, res) handler, which RETURNS A
+  // PROMISE and takes exactly two arguments — confirmed against the installed
+  // version: handler.length === 2.
+  //
+  // This used to pass a third `next` callback and resolve the response from
+  // inside it. Koa never calls a third argument, so that callback never ran
+  // and the surrounding Promise never settled: every request to /api/oauth/*
+  // hung until the platform timed it out. Nothing in the OAuth flow —
+  // registration, authorization, token exchange — could complete.
+  try {
+    const handler = provider.callback();
+    await handler(fakeReq, fakeRes);
+  } catch (err) {
+    console.error("OAuth handler error:", err);
+    return new Response(
+      JSON.stringify({
+        error: "server_error",
+        error_description: err?.message || String(err),
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
 
-      handler(fakeReq, fakeRes, (err) => {
-        if (err) {
-          resolve(
-            new Response(
-              JSON.stringify({
-                error: "server_error",
-                error_description: err.message,
-              }),
-              { status: 500, headers: { "Content-Type": "application/json" } },
-            ),
-          );
-          return;
-        }
-        const { status, body, headers } = fakeRes._finalize();
-        resolve(new Response(body, { status, headers }));
-      });
-    } catch (err) {
-      reject(err);
-    }
-  });
+  const { status, body, headers } = fakeRes._finalize();
+
+  // 204/304 must not carry a body.
+  const bodyless = status === 204 || status === 304;
+  return new Response(bodyless ? null : body, { status, headers });
 }
 
 export async function GET(request) {

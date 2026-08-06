@@ -103,9 +103,16 @@ export class SupabaseOidcAdapter {
     }
 
     // Grantable models → maintain grant -> [token keys] list
+    //
+    // KEY NAMESPACE: this index MUST NOT use `Grant:<id>`. "Grant" is a real
+    // oidc-provider model (provider.Grant, created during consent), so it
+    // stores its own payload under this.key(id) === `Grant:<id>`. Sharing the
+    // namespace meant the index below overwrote the actual grant — and the
+    // grant overwrote the index — silently breaking consent. The SDK's memory
+    // adapter avoids this the same way, with a separate grantKeyFor prefix.
     const { grantId, userCode } = payload || {};
     if (GRANTABLE.has(this.model) && grantId) {
-      const grantKey = `Grant:${grantId}`;
+      const grantKey = `GrantIndex:${grantId}`;
       const { data: existing } = await supabase
         .from("oidc_models")
         .select("payload")
@@ -119,7 +126,7 @@ export class SupabaseOidcAdapter {
       await supabase.from("oidc_models").upsert(
         {
           id: grantKey,
-          model_type: "Grant",
+          model_type: "GrantIndex",
           payload: { keys },
           expires_at: expiresAt,
         },
@@ -154,7 +161,8 @@ export class SupabaseOidcAdapter {
     const supabase = getServiceSupabase();
     if (!supabase) return;
 
-    const grantKey = `Grant:${grantId}`;
+    // Must match the index namespace written in upsert().
+    const grantKey = `GrantIndex:${grantId}`;
     const { data } = await supabase
       .from("oidc_models")
       .select("payload")

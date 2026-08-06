@@ -23,6 +23,7 @@ import {
 } from "@/lib/db";
 import { createClient } from "@/lib/supabase/client";
 import { AskAiTrigger } from "@/components/NoteChat";
+import { SearchTrigger } from "@/components/GlobalSearch";
 
 // Phase 7B navigation shell.
 //
@@ -265,8 +266,9 @@ export default function Sidebar({ activeFolderId = null }) {
           <Download {...ICON} />
           Import
         </Link>
-        {/* Opens the NoteChat panel mounted in layout.js. Not a route, so it
-            carries no data-active state. */}
+        {/* Both open overlays mounted in layout.js rather than navigating,
+            so neither carries data-active state. */}
+        <SearchTrigger onNavigate={() => setMobileOpen(false)} />
         <AskAiTrigger onNavigate={() => setMobileOpen(false)} />
         <Link
           href="/settings"

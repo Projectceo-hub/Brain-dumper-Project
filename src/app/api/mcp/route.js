@@ -14,11 +14,26 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { resolveUserFromBearer, isServiceRoleConfigured } from "@/lib/mcp/auth";
 import { buildMcpServer } from "@/lib/mcp/server";
 
-function unauthorizedResponse() {
+// The resource metadata URL is derived from the incoming request, never
+// hardcoded. It previously pinned one production hostname, so the discovery
+// pointer was wrong on every other domain — preview deployments, a custom
+// domain, or localhost — and the client gave up before authenticating.
+//
+// The path also matters: RFC 9728 locates the document for resource
+// `<origin>/api/mcp` at `<origin>/.well-known/oauth-protected-resource/api/mcp`
+// (the resource path is inserted after the well-known segment). This header
+// used to omit the `/api/mcp` suffix and point at the bare document, which is
+// a different file describing a different resource.
+function resourceMetadataUrl(request) {
+  const url = new URL(request.url);
+  return `${url.protocol}//${url.host}/.well-known/oauth-protected-resource/api/mcp`;
+}
+
+function unauthorizedResponse(request) {
   return new Response(null, {
     status: 401,
     headers: {
-      "WWW-Authenticate": 'Bearer resource_metadata="https://brain-dumper-project.vercel.app/.well-known/oauth-protected-resource"',
+      "WWW-Authenticate": `Bearer resource_metadata="${resourceMetadataUrl(request)}"`,
     },
   });
 }
@@ -72,9 +87,17 @@ async function handleRequest(request) {
     return serviceUnavailableResponse();
   }
 
-  const userId = await resolveUserFromBearer(request.headers.get("authorization"));
+  // The origin is passed through so an OAuth access token can be resolved
+  // against the provider instance for this issuer.
+  const requestUrl = new URL(request.url);
+  const issuer = `${requestUrl.protocol}//${requestUrl.host}`;
+
+  const userId = await resolveUserFromBearer(
+    request.headers.get("authorization"),
+    issuer,
+  );
   if (!userId) {
-    return unauthorizedResponse();
+    return unauthorizedResponse(request);
   }
 
   // Per-request, stateless transport: no session id is generated or
@@ -135,13 +158,8 @@ export async function DELETE(request) {
   return handleRequest(request);
 }
 
-export async function HEAD() {
-  return new Response(null, {
-    status: 401,
-    headers: {
-      "WWW-Authenticate": 'Bearer resource_metadata="https://brain-dumper-project.vercel.app/.well-known/oauth-protected-resource"',
-    },
-  });
+export async function HEAD(request) {
+  return unauthorizedResponse(request);
 }
 
 export async function OPTIONS() {

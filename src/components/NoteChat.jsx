@@ -2,6 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import {
+  getChatHistory,
+  saveChatHistory,
+  clearChatHistory,
+} from "@/lib/db";
+import { getActiveNote } from "@/lib/activeNote";
 
 // Phase 10 — Chat with Notes.
 //
@@ -93,7 +99,10 @@ export function AskAiTrigger({ onNavigate }) {
   );
 }
 
-export default function NoteChat() {
+// `activeNote` is accepted as a prop for direct use, but defaults to the
+// shared module value — NoteChat is mounted in layout.js, far from the editor
+// that knows which note is open, so there is no parent able to pass it.
+export default function NoteChat({ activeNote = null }) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState("");
@@ -109,13 +118,35 @@ export default function NoteChat() {
     return () => window.removeEventListener(OPEN_EVENT, handleOpen);
   }, []);
 
-  // Closing discards the thread — each session starts clean.
+  // Restore the persisted thread each time the panel opens. Reading on open
+  // rather than on mount keeps IndexedDB out of the initial page load, since
+  // this component is mounted on every route.
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    (async () => {
+      const stored = await getChatHistory();
+      if (!cancelled && stored.length > 0) setMessages(stored);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
+  // Closing clears the panel's UI state only — Dexie keeps the thread, so it
+  // reloads on the next open. "Clear" is the only thing that discards it.
   const handleClose = useCallback(() => {
     setIsOpen(false);
     setMessages([]);
     setInputValue("");
     setError("");
     setIsLoading(false);
+  }, []);
+
+  const handleClearThread = useCallback(async () => {
+    setMessages([]);
+    setError("");
+    await clearChatHistory();
   }, []);
 
   useEffect(() => {
@@ -149,6 +180,7 @@ export default function NoteChat() {
 
     const thread = [...messages, { role: "user", content: text }];
     setMessages(thread);
+    saveChatHistory(thread);
     setInputValue("");
     setError("");
     setIsLoading(true);
@@ -166,10 +198,14 @@ export default function NoteChat() {
         // Fall through — the route resolves identity from cookies anyway.
       }
 
+      // Read at send time, not render time, so the model sees what is in the
+      // editor right now — including text the user has not saved yet.
+      const note = activeNote || getActiveNote();
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: thread, userId }),
+        body: JSON.stringify({ messages: thread, userId, activeNote: note }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -179,10 +215,11 @@ export default function NoteChat() {
         return;
       }
 
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: data.reply },
-      ]);
+      setMessages((prev) => {
+        const next = [...prev, { role: "assistant", content: data.reply }];
+        saveChatHistory(next);
+        return next;
+      });
     } catch (err) {
       setError(err?.message || "Could not reach the assistant.");
     } finally {
@@ -221,15 +258,27 @@ export default function NoteChat() {
         >
           Ask your notes
         </h2>
-        <button
-          type="button"
-          onClick={handleClose}
-          aria-label="Close chat"
-          className="shrink-0 transition-colors"
-          style={{ color: "var(--text-dim)" }}
-        >
-          <CloseIcon />
-        </button>
+        <div className="flex shrink-0 items-center gap-3">
+          {messages.length > 0 && (
+            <button
+              type="button"
+              onClick={handleClearThread}
+              className="bg-transparent p-0 text-[12px] transition-colors"
+              style={{ border: "none", color: "var(--text-muted)" }}
+            >
+              Clear
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleClose}
+            aria-label="Close chat"
+            className="shrink-0 transition-colors"
+            style={{ color: "var(--text-dim)" }}
+          >
+            <CloseIcon />
+          </button>
+        </div>
       </div>
 
       {/* ------------------------------- thread ------------------------------ */}

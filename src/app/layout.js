@@ -6,6 +6,7 @@ import {
 } from "next/font/google";
 import AuthGate from "@/components/AuthGate";
 import NoteChat from "@/components/NoteChat";
+import { GlobalSearchHost } from "@/components/GlobalSearch";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import ThemeProvider from "@/components/ThemeProvider";
 import "./globals.css";
@@ -66,11 +67,17 @@ export default function RootLayout({ children }) {
       <body className="min-h-full flex flex-col" style={{ background: "var(--bg)" }}>
         <ThemeProvider>
           <AuthGate>{children}</AuthGate>
-          {/* Mounted outside AuthGate so navigating between routes never
-              remounts it and drops an open thread. It renders nothing until
-              opened, and the only thing that opens it is the sidebar
-              trigger — which itself only exists once signed in. */}
+          {/* Both are mounted outside AuthGate so navigating between routes
+              never remounts them. Each renders nothing until opened, and the
+              only things that open them are the sidebar triggers and Cmd/
+              Ctrl+K — which exist only once signed in.
+
+              NoteChat deliberately stays here rather than moving into
+              page.js: the sidebar's "Ask AI" button renders on every route,
+              so a home-page-only mount would leave it inert everywhere else.
+              The open note reaches it through @/lib/activeNote instead. */}
           <NoteChat />
+          <GlobalSearchHost />
         </ThemeProvider>
         <ServiceWorkerRegistrar />
       </body>

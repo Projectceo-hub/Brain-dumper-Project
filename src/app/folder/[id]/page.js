@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Plus, Network, Trash2 } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
+import BacklinksPanel from "@/components/BacklinksPanel";
+import { setActiveNote, clearActiveNote } from "@/lib/activeNote";
 import {
   getFolderById,
   getNotesInFolder,
@@ -200,6 +202,23 @@ export default function FolderPage() {
       document.body.style.overflow = prevBody;
     };
   }, [editingNote]);
+
+  // Phase 11: publish the open note so the chat panel (mounted in layout.js,
+  // outside this tree) can answer questions about it.
+  //
+  // setActiveNote is a module-level assignment, not React state, so running
+  // this on every keystroke costs nothing and re-renders nothing — while
+  // still meaning the AI sees text the user has typed but not yet saved.
+  // Nothing here touches the editor DOM, the autosave timer or the wipe
+  // guards; it only reads state those systems already maintain.
+  useEffect(() => {
+    if (!editingNote) {
+      clearActiveNote();
+      return;
+    }
+    setActiveNote({ id: editingNote.id, title: editTitle, body: editBody });
+    return () => clearActiveNote();
+  }, [editingNote, editTitle, editBody]);
 
   const fetchFolderAndNotes = async () => {
     try {
@@ -1052,6 +1071,14 @@ export default function FolderPage() {
               </div>
             )}
           </div>
+
+          {/* Backlinks live INSIDE the scroll pane, so the editor keeps
+              exactly one scroll container and the pinned footer below is
+              unaffected. */}
+          <BacklinksPanel
+            noteId={editingNote.id}
+            onSelectNote={handleMentionClick}
+          />
           </div>
           {/* end of the single scroll container */}
 
