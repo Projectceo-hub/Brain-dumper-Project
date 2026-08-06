@@ -1023,40 +1023,118 @@ export async function getEntitiesForNoteTree(rootNoteId) {
   return getEntitiesByNames([...refNames]);
 }
 
+// Finds an existing note in this folder with exactly this title and parent.
+// Dedup key for organized notes: (user_id, folder_id, parent_note_id, title).
+//
+// parent_note_id is part of the key on purpose. Two sibling subtrees can each
+// carry a child with the same generic label ("Notes", "Next steps"); matching
+// on title alone would collapse them into one row and lose content. Oldest
+// match wins, so repeat runs keep converging on the same row rather than
+// ping-ponging between duplicates left over from earlier runs.
+async function findOrganizedNoteByTitle(userId, folderId, title, parentNoteId) {
+  const parent = parentNoteId == null ? null : String(parentNoteId);
+
+  const matches = await db.notes
+    .where("folderId")
+    .equals(String(folderId))
+    .filter((n) => {
+      if (n.userId !== userId || n.title !== title) return false;
+      const rowParent =
+        n.parentNoteId === undefined || n.parentNoteId === null
+          ? null
+          : String(n.parentNoteId);
+      return rowParent === parent;
+    })
+    .toArray();
+
+  if (matches.length === 0) return null;
+  matches.sort((a, b) => toDate(a.createdAt) - toDate(b.createdAt));
+  return matches[0];
+}
+
 export async function createNotesFromTree(folderId, tree, parentNoteId = null) {
   const now = new Date();
   const userId = getRequiredUserId();
   const label = typeof tree.label === "string" ? tree.label.trim() : "Untitled";
-  const note = {
-    id: makeId(),
-    userId,
-    folderId: String(folderId),
-    parentNoteId: parentNoteId == null ? null : String(parentNoteId),
-    title: label || "Untitled",
-    body: cleanNoteBody(tree.note, label),
-    entityRefs: Array.isArray(tree.entityRefs) ? tree.entityRefs : [],
-    createdAt: now,
-    updatedAt: now,
-    syncStatus: "pending",
-    lastSyncError: "",
-  };
+  const title = label || "Untitled";
+  const body = cleanNoteBody(tree.note, label);
+  const entityRefs = Array.isArray(tree.entityRefs) ? tree.entityRefs : [];
 
-  await db.notes.add(note);
+  // DEDUPLICATION — update in place instead of inserting a second copy.
+  //
+  // Re-organizing the same content used to insert a whole fresh tree every
+  // run, which is what accumulated ~150 orphaned duplicates.
+  //
+  // Skipped when the AI returned no label: "Untitled" is the fallback for a
+  // missing label, so deduping on it would silently merge several genuinely
+  // different unlabelled nodes into one and destroy their content.
+  const parent = parentNoteId == null ? null : String(parentNoteId);
 
-  await syncOrQueue({
-    table: "notes",
-    recordId: note.id,
-    action: "upsert",
-    payload: toRemoteNote(note),
-  });
+  const existing = label
+    ? await findOrganizedNoteByTitle(userId, folderId, title, parent)
+    : null;
+
+  let noteId;
+
+  if (existing) {
+    const updated = {
+      ...existing,
+      title,
+      body,
+      entityRefs,
+      parentNoteId: parent,
+      updatedAt: now,
+      syncStatus: "pending",
+      lastSyncError: "",
+    };
+    await db.notes.put(updated);
+    noteId = updated.id;
+
+    await syncOrQueue({
+      table: "notes",
+      recordId: noteId,
+      action: "upsert",
+      payload: toRemoteNote(updated),
+    });
+  } else {
+    const note = {
+      id: makeId(),
+      userId,
+      folderId: String(folderId),
+      // Threading the parent through is load-bearing, not incidental:
+      // graph/page.js gates the AI organizer on
+      // getChildNotes(rootNote.id).length === 0, and fetchDescendantTree
+      // builds the mind map from the same links. Writing null here made that
+      // guard always true (re-running the model on every visualise) and
+      // flattened every rendered tree.
+      parentNoteId: parent,
+      title,
+      body,
+      entityRefs,
+      createdAt: now,
+      updatedAt: now,
+      syncStatus: "pending",
+      lastSyncError: "",
+    };
+
+    await db.notes.add(note);
+    noteId = note.id;
+
+    await syncOrQueue({
+      table: "notes",
+      recordId: note.id,
+      action: "upsert",
+      payload: toRemoteNote(note),
+    });
+  }
 
   if (Array.isArray(tree.children)) {
     for (const child of tree.children) {
-      await createNotesFromTree(folderId, child, note.id);
+      await createNotesFromTree(folderId, child, noteId);
     }
   }
 
   await touchFolder(folderId, now);
 
-  return note.id;
+  return noteId;
 }

@@ -314,26 +314,84 @@ export async function createChildNoteForMcp(
   if (body === label) body = "";
 
   const now = new Date().toISOString();
-  const id = crypto.randomUUID();
+  const parent = parentNoteId == null ? null : String(parentNoteId);
 
-  const { data, error } = await supabase
-    .from("notes")
-    .insert({
-      id,
-      user_id: userId,
-      folder_id: String(folderId),
-      parent_note_id: parentNoteId == null ? null : String(parentNoteId),
-      title: label,
-      body,
-      created_at: now,
-      updated_at: now,
-    })
-    .select(
-      "id, user_id, folder_id, parent_note_id, title, body, created_at, updated_at",
-    )
-    .single();
+  // DEDUPLICATION — mirrors createNotesFromTree in db.js.
+  //
+  // This used to insert unconditionally, so re-organizing the same dump wrote
+  // a whole fresh tree every run. Dedup key is
+  // (user_id, folder_id, parent_note_id, title); parent is part of the key so
+  // two sibling subtrees can each hold a child with the same generic label
+  // without collapsing into one row.
+  //
+  // Skipped when the node carried no label: "Untitled" is the fallback for a
+  // missing label, so matching on it would merge unrelated unlabelled nodes.
+  const hasRealLabel = Boolean((node.label || "").toString().trim());
 
-  if (error) throw new Error(`Failed to create child note: ${error.message}`);
+  let existingId = null;
+  if (hasRealLabel) {
+    let lookup = supabase
+      .from("notes")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("folder_id", String(folderId))
+      .eq("title", label);
+
+    // PostgREST needs .is() for NULL; .eq() would compare against the string.
+    lookup = parent === null
+      ? lookup.is("parent_note_id", null)
+      : lookup.eq("parent_note_id", parent);
+
+    const { data: found, error: lookupError } = await lookup
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (lookupError) {
+      throw new Error(`Failed to check for existing note: ${lookupError.message}`);
+    }
+    existingId = found?.id || null;
+  }
+
+  let data;
+  if (existingId) {
+    const { data: updated, error: updateError } = await supabase
+      .from("notes")
+      .update({ body, updated_at: now })
+      .eq("user_id", userId)
+      .eq("id", existingId)
+      .select(
+        "id, user_id, folder_id, parent_note_id, title, body, created_at, updated_at",
+      )
+      .single();
+
+    if (updateError) {
+      throw new Error(`Failed to update child note: ${updateError.message}`);
+    }
+    data = updated;
+  } else {
+    const { data: inserted, error } = await supabase
+      .from("notes")
+      .insert({
+        id: crypto.randomUUID(),
+        user_id: userId,
+        folder_id: String(folderId),
+        parent_note_id: parent,
+        title: label,
+        body,
+        created_at: now,
+        updated_at: now,
+      })
+      .select(
+        "id, user_id, folder_id, parent_note_id, title, body, created_at, updated_at",
+      )
+      .single();
+
+    if (error) throw new Error(`Failed to create child note: ${error.message}`);
+    data = inserted;
+  }
+
+  const id = data.id;
 
   // Optional entity persistence (Phase 3 entity table) — best-effort, never
   // blocks a tool call from returning just because entity save failed.
