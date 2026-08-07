@@ -8,20 +8,26 @@
 // WWW-Authenticate header pointing here. The `resource` field must match
 // the URL the user entered for the MCP server exactly; mismatches break
 // the OAuth flow.
+//
+// Byte-for-byte identical to the path-inserted document at
+// /.well-known/oauth-protected-resource/api/mcp. The two used to disagree:
+// this one omitted the scope and bearer-method fields, and — because it was
+// missing `force-dynamic` — Next could prerender it at build time and freeze a
+// build-time host into `resource`, so it also disagreed about the origin.
+// Whichever document the client happened to read decided whether the flow
+// survived validation.
+
+import { resolvePublicOrigin } from "@/lib/publicOrigin";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request) {
-  const url = new URL(request.url);
-  const origin = `${url.protocol}//${url.host}`;
-  const resourceUrl = `${origin}/api/mcp`;
-  const authorizationServerUrl = `${origin}`;
+  const origin = resolvePublicOrigin(request);
 
-  // Kept in sync with the path-inserted document at
-  // /.well-known/oauth-protected-resource/api/mcp — the two used to disagree,
-  // this one omitting the scope and bearer-method fields.
   return Response.json(
     {
-      resource: resourceUrl,
-      authorization_servers: [authorizationServerUrl],
+      resource: `${origin}/api/mcp`,
+      authorization_servers: [origin],
       scopes_supported: ["mcp"],
       bearer_methods_supported: ["header"],
     },

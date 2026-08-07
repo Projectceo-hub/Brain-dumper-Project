@@ -13,11 +13,13 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { resolveUserFromBearer, isServiceRoleConfigured } from "@/lib/mcp/auth";
 import { buildMcpServer } from "@/lib/mcp/server";
+import { resolvePublicOrigin } from "@/lib/publicOrigin";
 
-// The resource metadata URL is derived from the incoming request, never
-// hardcoded. It previously pinned one production hostname, so the discovery
-// pointer was wrong on every other domain — preview deployments, a custom
-// domain, or localhost — and the client gave up before authenticating.
+// The resource metadata URL comes from NEXT_PUBLIC_APP_URL (falling back to
+// the incoming request), never a hardcoded host. It previously pinned one
+// production hostname, so the discovery pointer was wrong on every other
+// domain — preview deployments, a custom domain, or localhost — and the client
+// gave up before authenticating.
 //
 // The path also matters: RFC 9728 locates the document for resource
 // `<origin>/api/mcp` at `<origin>/.well-known/oauth-protected-resource/api/mcp`
@@ -25,8 +27,7 @@ import { buildMcpServer } from "@/lib/mcp/server";
 // used to omit the `/api/mcp` suffix and point at the bare document, which is
 // a different file describing a different resource.
 function resourceMetadataUrl(request) {
-  const url = new URL(request.url);
-  return `${url.protocol}//${url.host}/.well-known/oauth-protected-resource/api/mcp`;
+  return `${resolvePublicOrigin(request)}/.well-known/oauth-protected-resource/api/mcp`;
 }
 
 function unauthorizedResponse(request) {
@@ -88,9 +89,10 @@ async function handleRequest(request) {
   }
 
   // The origin is passed through so an OAuth access token can be resolved
-  // against the provider instance for this issuer.
-  const requestUrl = new URL(request.url);
-  const issuer = `${requestUrl.protocol}//${requestUrl.host}`;
+  // against the provider instance for this issuer. It must be the same origin
+  // the discovery documents advertise, or the token was minted by a different
+  // provider instance and will not be found.
+  const issuer = resolvePublicOrigin(request);
 
   const userId = await resolveUserFromBearer(
     request.headers.get("authorization"),

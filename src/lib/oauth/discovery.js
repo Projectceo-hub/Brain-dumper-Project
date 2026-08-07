@@ -3,9 +3,12 @@
 // Discovery 1.0. Both endpoints return the same metadata (this module
 // is consumed by the .well-known routes).
 
+import { resolvePublicOrigin } from "@/lib/publicOrigin";
+
 export async function getDiscoveryMetadata(request) {
-  const url = new URL(request.url);
-  const issuer = `${url.protocol}//${url.host}`;
+  // Must be the same origin the protected-resource documents name as their
+  // authorization_server, and the same one getProvider() is built with.
+  const issuer = resolvePublicOrigin(request);
 
   return {
     issuer,

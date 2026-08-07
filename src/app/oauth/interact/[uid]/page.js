@@ -19,6 +19,7 @@ import { redirect } from "next/navigation";
 import { getProvider } from "@/lib/oauth/provider";
 import { isServiceRoleConfigured } from "@/lib/mcp/auth";
 import { createServerClientFromCookies, getAuthenticatedUser } from "@/lib/supabase/server";
+import { resolvePublicOrigin } from "@/lib/publicOrigin";
 
 // Friendly display names for known client_ids. If the client_id isn't in this
 // map (e.g. a DCR-registered client we've never seen), we fall back to the
@@ -27,9 +28,17 @@ const CLIENT_DISPLAY_NAMES = {
   "claude-ai-web": "Claude",
 };
 
-function buildOrigin(request) {
-  const url = new URL(request.url);
-  return `${url.protocol}//${url.host}`;
+// There is no Request object in a server component, so the scheme is
+// reconstructed from the forwarded header. It used to be hardcoded to https,
+// which on localhost produced `https://localhost:3000` here and
+// `http://localhost:3000` in /api/oauth — two different issuers, so
+// getProvider() built two provider instances and the interaction started by
+// one could not be found by the other.
+function originFromHeaders(rawHeaders, forwardedProto) {
+  const host = rawHeaders.host;
+  const isLoopback = /^(localhost|127\.0\.0\.1|\[::1\])(:|$)/i.test(host);
+  const proto = forwardedProto || (isLoopback ? "http" : "https");
+  return resolvePublicOrigin({ url: `${proto}://${host}/` });
 }
 
 // Minimal Koa-style req shape for oidc-provider's interactionDetails().
@@ -56,19 +65,21 @@ export default async function InteractPage({ params }) {
 
   const cookieStore = await cookies();
   const allCookies = cookieStore.getAll();
+  const headerList = await headers();
   const rawHeaders = {
-    host: (await headers()).get("host") || "localhost",
+    host: headerList.get("host") || "localhost",
     cookie: allCookies.map((c) => `${c.name}=${c.value}`).join("; "),
   };
 
-  const request = {
-    url: `https://${rawHeaders.host}/oauth/interact/${uid}`,
-  };
+  const origin = originFromHeaders(
+    rawHeaders,
+    headerList.get("x-forwarded-proto"),
+  );
 
   let details;
   let interactionError = "";
   try {
-    const provider = await getProvider(buildOrigin(request));
+    const provider = await getProvider(origin);
     const fakeReq = fakeRequestFromHeaders(rawHeaders);
     const fakeRes = {
       _statusCode: 200,

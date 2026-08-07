@@ -5,17 +5,22 @@
 // document a client fetches after a 401 on /api/mcp — and it is what the
 // WWW-Authenticate header on that route points to.
 //
-// Every URL is derived from the incoming request. These were previously
-// hardcoded to one production hostname, which meant the document advertised
-// the wrong resource on any other domain (preview deployments, a custom
-// domain, localhost). A `resource` value that does not match the URL the user
-// actually entered fails the client's validation and aborts the OAuth flow.
+// Every URL comes from NEXT_PUBLIC_APP_URL, falling back to the incoming
+// request. These were previously hardcoded to one production hostname, which
+// meant the document advertised the wrong resource on any other domain
+// (preview deployments, a custom domain, localhost). A `resource` value that
+// does not match the URL the user actually entered fails the client's
+// validation and aborts the OAuth flow.
+//
+// The bare /.well-known/oauth-protected-resource document must stay identical
+// to this one — see the note there.
+
+import { resolvePublicOrigin } from "@/lib/publicOrigin";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request) {
-  const url = new URL(request.url);
-  const origin = `${url.protocol}//${url.host}`;
+  const origin = resolvePublicOrigin(request);
 
   return Response.json(
     {

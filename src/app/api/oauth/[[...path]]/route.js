@@ -6,12 +6,7 @@
 
 import { getProvider } from "@/lib/oauth/provider";
 import { isServiceRoleConfigured } from "@/lib/mcp/auth";
-import Provider from "oidc-provider";
-
-function buildOrigin(request) {
-  const url = new URL(request.url);
-  return `${url.protocol}//${url.host}`;
-}
+import { resolvePublicOrigin } from "@/lib/publicOrigin";
 
 const OAUTH_PREFIX = "/api/oauth";
 
@@ -55,7 +50,7 @@ async function handleRequest(request) {
     );
   }
 
-  const origin = buildOrigin(request);
+  const origin = resolvePublicOrigin(request);
   const provider = await getProvider(origin);
 
   const bodyStream = await bodyToNodeStream(request);
