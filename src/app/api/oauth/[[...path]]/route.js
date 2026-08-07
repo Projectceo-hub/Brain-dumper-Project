@@ -21,24 +21,6 @@ function oidcRequestUrl(request) {
 
 import { Readable } from "node:stream";
 
-async function bodyToNodeStream(request) {
-  try {
-    const buffer = Buffer.from(await request.arrayBuffer());
-    const stream = new Readable({
-      read() {
-        this.push(buffer);
-        this.push(null);
-      },
-    });
-    return stream;
-  } catch {
-    const stream = new Readable({
-      read() { this.push(null); },
-    });
-    return stream;
-  }
-}
-
 async function handleRequest(request) {
   if (!isServiceRoleConfigured()) {
     return new Response(
@@ -53,35 +35,31 @@ async function handleRequest(request) {
   const origin = resolvePublicOrigin(request);
   const provider = await getProvider(origin);
 
-  const bodyStream = await bodyToNodeStream(request);
-
-  const fakeReq = {
-    method: request.method,
-    url: oidcRequestUrl(request),
-    headers: Object.fromEntries(
-      [...request.headers.entries()].map(([k, v]) => [k.toLowerCase(), v]),
-    ),
-    // Koa reads req.socket for ctx.ip and, when no X-Forwarded-Proto is
-    // present, for ctx.protocol. Without it those getters throw on a plain
-    // object. `encrypted` mirrors the original request's scheme so local
-    // http and deployed https both resolve correctly.
-    socket: {
-      encrypted: new URL(request.url).protocol === "https:",
-      remoteAddress: "127.0.0.1",
-    },
-    // Provide a proper Node.js Readable for oidc-provider/body-parser:
-    readable: true,
-    readableLength: 0,
-    readableEncoding: null,
-    destroyed: false,
-    on: (...args) => { bodyStream.on(...args); },
-    once: (...args) => { bodyStream.once(...args); },
-    removeListener: (...args) => { bodyStream.removeListener(...args); },
-    pipe: (...args) => { return bodyStream.pipe(...args); },
-    resume: () => {},
-    pause: () => {},
-    read: () => null,
-    // Koa will read req for 'data'/'end' events when chunky:
+  // Read the whole body once, up front. The previous shim hand-wired
+  // on/once/pipe onto a plain object and forwarded them to a separately
+  // created Readable; oidc-provider's body-parser (raw-body) did not reliably
+  // receive the 'data'/'end' events through that indirection, so a DCR POST
+  // could be parsed as an empty body and rejected as 400
+  // invalid_client_metadata even though Claude sent valid metadata.
+  //
+  // Readable.from([Buffer]) IS a real IncomingMessage-shaped stream that
+  // emits the buffer then 'end' with no custom plumbing. We attach the
+  // request metadata Koa reads (method/url/headers/socket) directly onto it.
+  const rawBody = await request.text();
+  const fakeReq = Readable.from([Buffer.from(rawBody)]);
+  fakeReq.method = request.method;
+  fakeReq.url = oidcRequestUrl(request);
+  fakeReq.headers = Object.fromEntries(
+    [...request.headers.entries()].map(([k, v]) => [k.toLowerCase(), v]),
+  );
+  // Koa reads req.socket for ctx.ip and, when no X-Forwarded-Proto header is
+  // present, for ctx.protocol. `encrypted` is derived from the resolved issuer
+  // scheme so ctx.protocol matches the origin the provider was built with —
+  // hardcoding it true would make ctx.protocol https on a local http request
+  // and mismatch the http issuer, breaking localhost testing.
+  fakeReq.socket = {
+    encrypted: origin.startsWith("https:"),
+    remoteAddress: "127.0.0.1",
   };
 
   // `statusCode` must be a real writable property: Koa sets the response
@@ -89,8 +67,13 @@ async function handleRequest(request) {
   // writeHead in some paths. The previous shape stored status solely in
   // _statusCode, so any status Koa set this way was discarded and every
   // response would have gone out as 200.
+  //
+  // It starts null, not 200. Koa assigns res.statusCode = 404 before running
+  // middleware and then the real status, so every genuine response overwrites
+  // this. If it is still null at the end, the handler never wrote a status —
+  // a silent failure that must surface as a 500, not a false 200.
   const fakeRes = {
-    statusCode: 200,
+    statusCode: null,
     headersSent: false,
     writableEnded: false,
     finished: false,
@@ -168,7 +151,11 @@ async function handleRequest(request) {
     );
   }
 
-  const { status, body, headers } = fakeRes._finalize();
+  const { status: rawStatus, body, headers } = fakeRes._finalize();
+
+  // A null/undefined status means nothing ever wrote a response: treat it as a
+  // 500 so a silent empty reply surfaces as an error instead of a false 200.
+  const status = rawStatus == null ? 500 : rawStatus;
 
   // 204/304 must not carry a body.
   const bodyless = status === 204 || status === 304;
