@@ -8,6 +8,13 @@
 
 import { getServiceSupabase } from "@/lib/supabase/service";
 
+// The Client model lives in its own table with a NULL expiry so DCR-registered
+// clients (e.g. Claude.ai's connector) survive serverless cold starts. In
+// oidc_models every row carries a non-null expires_at (default now()+24h), so a
+// client stored there is swept — the "registers once, gone next request" bug.
+const CLIENT_MODEL = "Client";
+const CLIENTS_TABLE = "oidc_clients";
+
 const GRANTABLE = new Set([
   "AccessToken",
   "AuthorizationCode",
@@ -28,12 +35,23 @@ export class SupabaseOidcAdapter {
   async destroy(id) {
     const supabase = getServiceSupabase();
     if (!supabase) return;
+    if (this.model === CLIENT_MODEL) {
+      await supabase.from(CLIENTS_TABLE).delete().eq("id", id);
+      return;
+    }
     await supabase.from("oidc_models").delete().eq("id", this.key(id));
   }
 
   async consume(id) {
     const supabase = getServiceSupabase();
     if (!supabase) return;
+    if (this.model === CLIENT_MODEL) {
+      await supabase
+        .from(CLIENTS_TABLE)
+        .update({ consumed_at: new Date().toISOString() })
+        .eq("id", id);
+      return;
+    }
     await supabase
       .from("oidc_models")
       .update({ consumed: new Date().toISOString() })
@@ -43,6 +61,14 @@ export class SupabaseOidcAdapter {
   async find(id) {
     const supabase = getServiceSupabase();
     if (!supabase) return undefined;
+    if (this.model === CLIENT_MODEL) {
+      const { data } = await supabase
+        .from(CLIENTS_TABLE)
+        .select("payload")
+        .eq("id", id)
+        .maybeSingle();
+      return data?.payload ?? undefined;
+    }
     const { data } = await supabase
       .from("oidc_models")
       .select("payload")
@@ -84,6 +110,17 @@ export class SupabaseOidcAdapter {
   async upsert(id, payload, expiresIn) {
     const supabase = getServiceSupabase();
     if (!supabase) return;
+
+    // Client → dedicated table, expires_at NULL (never expires). oidc-provider
+    // calls upsert for a Client with no expiresIn, so the expiresAt math below
+    // would produce an invalid date; short-circuit before it runs.
+    if (this.model === CLIENT_MODEL) {
+      await supabase.from(CLIENTS_TABLE).upsert(
+        { id, payload, expires_at: null },
+        { onConflict: "id" },
+      );
+      return;
+    }
 
     const key = this.key(id);
     const expireMs = Date.now() + expiresIn * 1000;
