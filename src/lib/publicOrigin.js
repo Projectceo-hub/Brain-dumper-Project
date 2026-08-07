@@ -29,3 +29,26 @@ export function resolvePublicOrigin(request) {
   const url = new URL(request.url);
   return `${url.protocol}//${url.host}`;
 }
+
+// The OAuth routes live under this path, and — critically — the oidc-provider
+// issuer includes it too. oidc-provider derives its "mount path" from the
+// issuer's pathname and prepends it to every URL it GENERATES (the resume
+// returnTo, the authorization-response redirect, the discovery endpoints). With
+// a bare-origin issuer it emitted root URLs like /auth/<uid> that have no
+// Next.js handler; with the path here it emits /api/oauth/auth/<uid>, which the
+// catch-all route serves. Route MATCHING is unaffected — oidc-provider's router
+// still matches the un-prefixed path (/auth, /reg, …), so the catch-all must
+// keep stripping this prefix before handing the request to the provider.
+export const OAUTH_MOUNT_PATH = "/api/oauth";
+
+// NEXT_PUBLIC_APP_URL must be a bare origin (no path). resolvePublicOrigin
+// normalizes it to an origin, so appending the mount path here never
+// double-counts /api/oauth even if the env var were mis-set with a trailing
+// path — normalizeOrigin drops everything but the origin.
+export function resolveOAuthIssuer(request) {
+  return `${resolvePublicOrigin(request)}${OAUTH_MOUNT_PATH}`;
+}
+
+export function oauthIssuerFromOrigin(origin) {
+  return `${normalizeOrigin(origin) ?? origin}${OAUTH_MOUNT_PATH}`;
+}

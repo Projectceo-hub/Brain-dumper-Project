@@ -244,11 +244,14 @@ export async function getProvider(baseUrl) {
       },
     ],
 
-    // Interaction policy — auto-approve for MCP connector flow.
+    // Interaction policy — login + consent prompts are active, so this URL IS
+    // reached. It is a root-absolute path, NOT derived from the issuer, so even
+    // though the issuer now carries the /api/oauth mount path the browser is
+    // sent to <origin>/oauth/interact/<uid> — the real Next.js interact page —
+    // not <origin>/api/oauth/oauth/interact/<uid>. oidc-provider uses this
+    // string verbatim in ctx.redirect() without prepending the mount path.
     interactions: {
       policy,
-      // The interaction URL is never hit because policy has no prompts,
-      // but oidc-provider requires it to be defined.
       url: (ctx) => `/oauth/interact/${ctx.oidc.uid}`,
     },
 

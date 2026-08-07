@@ -19,7 +19,7 @@ import { redirect } from "next/navigation";
 import { getProvider } from "@/lib/oauth/provider";
 import { isServiceRoleConfigured } from "@/lib/mcp/auth";
 import { createServerClientFromCookies, getAuthenticatedUser } from "@/lib/supabase/server";
-import { resolvePublicOrigin } from "@/lib/publicOrigin";
+import { resolvePublicOrigin, oauthIssuerFromOrigin } from "@/lib/publicOrigin";
 
 // Friendly display names for known client_ids. If the client_id isn't in this
 // map (e.g. a DCR-registered client we've never seen), we fall back to the
@@ -79,7 +79,9 @@ export default async function InteractPage({ params }) {
   let details;
   let interactionError = "";
   try {
-    const provider = await getProvider(origin);
+    // Must be the same issuer (origin + /api/oauth) the catch-all builds, so
+    // interactionDetails resolves against the same provider instance.
+    const provider = await getProvider(oauthIssuerFromOrigin(origin));
     const fakeReq = fakeRequestFromHeaders(rawHeaders);
     const fakeRes = {
       _statusCode: 200,

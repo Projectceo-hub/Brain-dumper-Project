@@ -25,7 +25,7 @@ import { cookies, headers } from "next/headers";
 import { getProvider } from "@/lib/oauth/provider";
 import { isServiceRoleConfigured } from "@/lib/mcp/auth";
 import { getAuthenticatedUser } from "@/lib/supabase/server";
-import { resolvePublicOrigin } from "@/lib/publicOrigin";
+import { resolveOAuthIssuer } from "@/lib/publicOrigin";
 
 export const dynamic = "force-dynamic";
 
@@ -68,7 +68,7 @@ export async function POST(request, { params }) {
 
   let provider;
   try {
-    provider = await getProvider(resolvePublicOrigin(request));
+    provider = await getProvider(resolveOAuthIssuer(request));
   } catch (err) {
     return new Response(`OAuth server error: ${err?.message || err}`, {
       status: 500,

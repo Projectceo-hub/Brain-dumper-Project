@@ -1,14 +1,16 @@
 // Catch-all OAuth 2.0 authorization server endpoint powered by oidc-provider.
-// Routes: /api/oauth/register, /api/oauth/auth, /api/oauth/token,
-// /api/oauth/introspect, /api/oauth/revoke, /.well-known/openid-configuration.
-// The oidc-provider handles these internally via Koa middleware; this route
-// passes the Next.js Request into the Koa-based provider.
+// The issuer is <origin>/api/oauth, so oidc-provider's own route names sit
+// under this prefix: /api/oauth/auth, /api/oauth/token, /api/oauth/reg (DCR),
+// /api/oauth/token/introspection, /api/oauth/token/revocation, /api/oauth/jwks,
+// and the resume path /api/oauth/auth/<uid>. The provider's router matches the
+// UN-prefixed path, so oidcRequestUrl strips /api/oauth before handing the
+// request to the Koa-based provider.
 
 import { getProvider } from "@/lib/oauth/provider";
 import { isServiceRoleConfigured } from "@/lib/mcp/auth";
-import { resolvePublicOrigin } from "@/lib/publicOrigin";
+import { resolvePublicOrigin, resolveOAuthIssuer, OAUTH_MOUNT_PATH } from "@/lib/publicOrigin";
 
-const OAUTH_PREFIX = "/api/oauth";
+const OAUTH_PREFIX = OAUTH_MOUNT_PATH;
 
 function oidcRequestUrl(request) {
   const url = new URL(request.url);
@@ -33,7 +35,10 @@ async function handleRequest(request) {
   }
 
   const origin = resolvePublicOrigin(request);
-  const provider = await getProvider(origin);
+  // Issuer carries the /api/oauth mount path so every URL oidc-provider emits
+  // is prefixed and lands back on this catch-all. The router still matches the
+  // un-prefixed path, so oidcRequestUrl below keeps stripping the prefix.
+  const provider = await getProvider(resolveOAuthIssuer(request));
 
   // Read the whole body once, up front. The previous shim hand-wired
   // on/once/pipe onto a plain object and forwarded them to a separately

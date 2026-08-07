@@ -15,7 +15,7 @@
 // The bare /.well-known/oauth-protected-resource document must stay identical
 // to this one — see the note there.
 
-import { resolvePublicOrigin } from "@/lib/publicOrigin";
+import { resolvePublicOrigin, resolveOAuthIssuer } from "@/lib/publicOrigin";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +25,12 @@ export async function GET(request) {
   return Response.json(
     {
       resource: `${origin}/api/mcp`,
-      authorization_servers: [origin],
+      // The authorization server's issuer includes the /api/oauth mount path,
+      // so its discovery metadata is served at
+      // /.well-known/oauth-authorization-server/api/oauth (RFC 8414 path
+      // insertion). Naming the bare origin here pointed clients at the wrong
+      // issuer and a discovery doc whose endpoints 404'd.
+      authorization_servers: [resolveOAuthIssuer(request)],
       scopes_supported: ["mcp"],
       bearer_methods_supported: ["header"],
     },

@@ -13,7 +13,7 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { resolveUserFromBearer, isServiceRoleConfigured } from "@/lib/mcp/auth";
 import { buildMcpServer } from "@/lib/mcp/server";
-import { resolvePublicOrigin } from "@/lib/publicOrigin";
+import { resolvePublicOrigin, resolveOAuthIssuer } from "@/lib/publicOrigin";
 
 // The resource metadata URL comes from NEXT_PUBLIC_APP_URL (falling back to
 // the incoming request), never a hardcoded host. It previously pinned one
@@ -88,11 +88,11 @@ async function handleRequest(request) {
     return serviceUnavailableResponse();
   }
 
-  // The origin is passed through so an OAuth access token can be resolved
-  // against the provider instance for this issuer. It must be the same origin
-  // the discovery documents advertise, or the token was minted by a different
-  // provider instance and will not be found.
-  const issuer = resolvePublicOrigin(request);
+  // The issuer (origin + /api/oauth) is passed through so an OAuth access token
+  // can be resolved against the same provider instance that minted it. It must
+  // match the issuer the catch-all OAuth route builds, or getProvider() would
+  // thrash between two cached instances.
+  const issuer = resolveOAuthIssuer(request);
 
   const userId = await resolveUserFromBearer(
     request.headers.get("authorization"),

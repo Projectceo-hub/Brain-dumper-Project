@@ -17,7 +17,7 @@
 // Whichever document the client happened to read decided whether the flow
 // survived validation.
 
-import { resolvePublicOrigin } from "@/lib/publicOrigin";
+import { resolvePublicOrigin, resolveOAuthIssuer } from "@/lib/publicOrigin";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +27,10 @@ export async function GET(request) {
   return Response.json(
     {
       resource: `${origin}/api/mcp`,
-      authorization_servers: [origin],
+      // Same issuer (with the /api/oauth mount path) as the path-inserted
+      // document at /.well-known/oauth-protected-resource/api/mcp — keep these
+      // two payloads identical.
+      authorization_servers: [resolveOAuthIssuer(request)],
       scopes_supported: ["mcp"],
       bearer_methods_supported: ["header"],
     },
