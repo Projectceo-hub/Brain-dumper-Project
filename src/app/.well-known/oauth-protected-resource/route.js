@@ -27,9 +27,13 @@ export async function GET(request) {
   return Response.json(
     {
       resource: `${origin}/api/mcp`,
-      // Same issuer (with the /api/oauth mount path) as the path-inserted
-      // document at /.well-known/oauth-protected-resource/api/mcp — keep these
-      // two payloads identical.
+      // Per RFC 9728 these are ISSUER IDENTIFIERS, not metadata URLs — the
+      // client appends /.well-known/oauth-authorization-server itself. Our
+      // issuer is the bare origin, so what the client derives is exactly
+      // <origin>/.well-known/oauth-authorization-server.
+      //
+      // Must stay identical to the path-inserted document at
+      // /.well-known/oauth-protected-resource/api/mcp.
       authorization_servers: [resolveOAuthIssuer(request)],
       scopes_supported: ["mcp"],
       bearer_methods_supported: ["header"],

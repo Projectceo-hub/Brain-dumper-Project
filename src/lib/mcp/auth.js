@@ -88,35 +88,29 @@ export async function revokeToken(userId, tokenId) {
 }
 
 /**
- * Resolve an OAuth access token issued by the MCP connector flow.
- *
- * STUB — the oidc-provider implementation was removed; the OAuth server is
- * being rebuilt as plain Next.js route handlers. Until that lands there is no
- * OAuth token store to look in, so this always returns null and only personal
- * API tokens (api_tokens) authenticate. The signature is kept so the rebuilt
- * lookup drops straight in here.
- */
-async function resolveUserFromOAuthToken(rawToken, issuer) {
-  void rawToken;
-  void issuer;
-  return null;
-}
-
-/**
  * Verify an Authorization: Bearer <token> header value.
  *
- * Accepts BOTH credential types this server issues:
- *   1. a personal API token from Settings → API tokens (api_tokens table)
- *   2. an OAuth access token from the MCP connector flow (oidc_models)
+ * ONE lookup covers BOTH credential types this server issues:
+ *   1. a personal API token from Settings → API tokens
+ *   2. an OAuth access token minted by POST /api/oauth/token
+ *
+ * Both are written to api_tokens as a SHA-256 hash, so the same hash lookup
+ * resolves either. OAuth tokens are distinguished only by a non-null client_id,
+ * which matters for display and revocation, not for authentication. Keeping
+ * them in one table is deliberate: the previous split store meant a client
+ * could finish the whole OAuth handshake, receive a valid token, present it,
+ * and be told 401 — which reads as an endless reconnect loop.
  *
  * Returns the owning user_id on success, or null if the token is missing,
- * revoked, expired, or unknown. Bumps last_used_at for personal tokens.
+ * revoked, expired, or unknown. Bumps last_used_at on success.
  *
- * `issuer` is the request origin, required only to resolve OAuth tokens.
+ * `issuer` is accepted for call-site compatibility and is not used: the lookup
+ * is issuer-independent.
  *
  * NEVER returns a token row — only the validated user_id.
  */
 export async function resolveUserFromBearer(authHeader, issuer = null) {
+  void issuer;
   if (!authHeader || typeof authHeader !== "string") return null;
   const match = authHeader.match(/^Bearer\s+(.+)$/i);
   if (!match) return null;
@@ -130,23 +124,24 @@ export async function resolveUserFromBearer(authHeader, issuer = null) {
 
   const { data, error } = await supabase
     .from("api_tokens")
-    .select("id, user_id, revoked_at")
+    .select("id, user_id, revoked_at, expires_at")
     .eq("token_hash", tokenHash)
     .maybeSingle();
 
-  if (!error && data && !data.revoked_at) {
-    await supabase
-      .from("api_tokens")
-      .update({ last_used_at: new Date().toISOString() })
-      .eq("id", data.id);
-    return data.user_id;
+  if (error || !data) return null;
+  if (data.revoked_at) return null;
+  // expires_at is NULL for both personal tokens and (currently) OAuth tokens;
+  // honour it anyway so adding a TTL later needs no change here.
+  if (data.expires_at && new Date(data.expires_at).getTime() <= Date.now()) {
+    return null;
   }
 
-  // A revoked personal token must stay revoked — don't fall through to the
-  // OAuth path and give it a second chance at authenticating.
-  if (data && data.revoked_at) return null;
+  await supabase
+    .from("api_tokens")
+    .update({ last_used_at: new Date().toISOString() })
+    .eq("id", data.id);
 
-  return resolveUserFromOAuthToken(rawToken, issuer);
+  return data.user_id;
 }
 
 export { isServiceRoleConfigured };

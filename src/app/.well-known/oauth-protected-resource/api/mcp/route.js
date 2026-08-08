@@ -25,11 +25,12 @@ export async function GET(request) {
   return Response.json(
     {
       resource: `${origin}/api/mcp`,
-      // The authorization server's issuer includes the /api/oauth mount path,
-      // so its discovery metadata is served at
-      // /.well-known/oauth-authorization-server/api/oauth (RFC 8414 path
-      // insertion). Naming the bare origin here pointed clients at the wrong
-      // issuer and a discovery doc whose endpoints 404'd.
+      // Per RFC 9728 these are ISSUER IDENTIFIERS, not metadata URLs — the
+      // client appends /.well-known/oauth-authorization-server itself. Our
+      // issuer is the bare origin, so what the client derives is exactly
+      // <origin>/.well-known/oauth-authorization-server. Putting that full
+      // metadata URL here instead would make a compliant client fetch
+      // /.well-known/oauth-authorization-server/.well-known/oauth-authorization-server.
       authorization_servers: [resolveOAuthIssuer(request)],
       scopes_supported: ["mcp"],
       bearer_methods_supported: ["header"],

@@ -30,25 +30,25 @@ export function resolvePublicOrigin(request) {
   return `${url.protocol}//${url.host}`;
 }
 
-// The OAuth routes live under this path, and — critically — the oidc-provider
-// issuer includes it too. oidc-provider derives its "mount path" from the
-// issuer's pathname and prepends it to every URL it GENERATES (the resume
-// returnTo, the authorization-response redirect, the discovery endpoints). With
-// a bare-origin issuer it emitted root URLs like /auth/<uid> that have no
-// Next.js handler; with the path here it emits /api/oauth/auth/<uid>, which the
-// catch-all route serves. Route MATCHING is unaffected — oidc-provider's router
-// still matches the un-prefixed path (/auth, /reg, …), so the catch-all must
-// keep stripping this prefix before handing the request to the provider.
+// Where the OAuth route handlers live. This is a ROUTE prefix only — it is
+// deliberately NOT part of the issuer any more.
+//
+// It used to be. oidc-provider derived its "mount path" from the issuer's
+// pathname, so the path had to be there for the URLs it generated to land on a
+// real handler. oidc-provider is gone; the handlers are now plain Next.js
+// routes at fixed paths, and an issuer with a path only creates work — RFC 8414
+// §3.1 would then require the metadata at a path-inserted well-known location,
+// giving two documents that can drift apart.
 export const OAUTH_MOUNT_PATH = "/api/oauth";
 
-// NEXT_PUBLIC_APP_URL must be a bare origin (no path). resolvePublicOrigin
-// normalizes it to an origin, so appending the mount path here never
-// double-counts /api/oauth even if the env var were mis-set with a trailing
-// path — normalizeOrigin drops everything but the origin.
+// The issuer IS the bare origin. Keeping this helper (rather than inlining
+// resolvePublicOrigin at every call site) means the identifier has one
+// definition, so discovery, the protected-resource documents and the MCP
+// route cannot disagree about it.
 export function resolveOAuthIssuer(request) {
-  return `${resolvePublicOrigin(request)}${OAUTH_MOUNT_PATH}`;
+  return resolvePublicOrigin(request);
 }
 
 export function oauthIssuerFromOrigin(origin) {
-  return `${normalizeOrigin(origin) ?? origin}${OAUTH_MOUNT_PATH}`;
+  return normalizeOrigin(origin) ?? origin;
 }
