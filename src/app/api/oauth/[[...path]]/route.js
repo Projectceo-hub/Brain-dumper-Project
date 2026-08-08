@@ -23,21 +23,7 @@ function oidcRequestUrl(request) {
 
 import { Readable } from "node:stream";
 
-// TEMPORARY DEBUG. Mask token/secret values so a logged response preview can
-// never leak a credential. Covers the JSON string fields oidc-provider emits
-// (token responses, DCR registration_access_token, authorization codes).
-// Remove together with the console.error calls below once the flow is verified.
-function redactSensitive(text) {
-  return String(text).replace(
-    /("(?:access_token|refresh_token|id_token|client_secret|registration_access_token|code)"\s*:\s*")[^"]*(")/gi,
-    "$1[REDACTED]$2",
-  );
-}
-
 async function handleRequest(request) {
-  // TEMPORARY DEBUG (step 1): incoming method + url.
-  console.error(`[oauth-debug] -> ${request.method} ${request.url}`);
-
   if (!isServiceRoleConfigured()) {
     return new Response(
       JSON.stringify({
@@ -65,9 +51,6 @@ async function handleRequest(request) {
   // emits the buffer then 'end' with no custom plumbing. We attach the
   // request metadata Koa reads (method/url/headers/socket) directly onto it.
   const rawBody = await request.text();
-  // TEMPORARY DEBUG (step 2): body length only — never the body itself, which
-  // can contain code_verifier / authorization codes.
-  console.error(`[oauth-debug] rawBody length=${rawBody.length}`);
   const fakeReq = Readable.from([Buffer.from(rawBody)]);
   fakeReq.method = request.method;
   fakeReq.url = oidcRequestUrl(request);
@@ -162,16 +145,7 @@ async function handleRequest(request) {
   try {
     const handler = provider.callback();
     await handler(fakeReq, fakeRes);
-    // TEMPORARY DEBUG (step 3): status + redacted first 500 chars of the body.
-    const previewBody = fakeRes._bodyChunks.length
-      ? Buffer.concat(fakeRes._bodyChunks).toString("utf8")
-      : "";
-    console.error(
-      `[oauth-debug] <- status=${fakeRes.statusCode} body=${redactSensitive(previewBody).slice(0, 500)}`,
-    );
   } catch (err) {
-    // TEMPORARY DEBUG (step 4): full stack of any caught error.
-    console.error("[oauth-debug] handler threw:", err?.stack || err);
     console.error("OAuth handler error:", err);
     return new Response(
       JSON.stringify({

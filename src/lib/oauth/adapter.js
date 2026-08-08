@@ -62,16 +62,11 @@ export class SupabaseOidcAdapter {
     const supabase = getServiceSupabase();
     if (!supabase) return undefined;
     if (this.model === CLIENT_MODEL) {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from(CLIENTS_TABLE)
         .select("payload")
         .eq("id", id)
         .maybeSingle();
-      // TEMPORARY DEBUG: which client_id /api/oauth/auth looks up, and whether
-      // it was found in oidc_clients. id is the client_id (not sensitive).
-      console.error(
-        `[oauth-debug] Client find id=${id} found=${data ? "yes" : "no"}${error ? ` error=${error.message}` : ""}`,
-      );
       return data?.payload ?? undefined;
     }
     const { data } = await supabase
@@ -120,15 +115,9 @@ export class SupabaseOidcAdapter {
     // calls upsert for a Client with no expiresIn, so the expiresAt math below
     // would produce an invalid date; short-circuit before it runs.
     if (this.model === CLIENT_MODEL) {
-      const { error } = await supabase.from(CLIENTS_TABLE).upsert(
+      await supabase.from(CLIENTS_TABLE).upsert(
         { id, payload, expires_at: null },
         { onConflict: "id" },
-      );
-      // TEMPORARY DEBUG: confirm DCR actually persisted the client, and surface
-      // any write error (e.g. missing oidc_clients table) that upsert otherwise
-      // swallows. id is the client_id (not sensitive); payload is NOT logged.
-      console.error(
-        `[oauth-debug] Client upsert id=${id} error=${error ? error.message : "none"}`,
       );
       return;
     }
