@@ -1,64 +1,71 @@
 // POST /oauth/interact/<uid>/login
 //
-// Receives the login form submission (email + password) from the interact page.
-// Uses Supabase signInWithPassword via the cookie-based SSR client (so the
-// resulting auth cookies are set on the response, propagating the session to
-// the subsequent GET /oauth/interact/<uid> request). On success, redirects
-// back to the same interact URL — which will now see a logged-in Supabase user
-// and render the Authorize card instead of the Login card.
-//
-// Does NOT touch provider.js or the OAuth catch-all route. Only side-effect on
-// the OAuth side is the Supabase session cookies set by createServerClient.
+// Verifies email + password against Supabase auth, then issues the short-lived
+// signed `oauth_session` cookie the consent step reads. Uses the service-role
+// client, so no app session cookie is created — proving your password here
+// authorizes one connector approval, not a browser login.
 
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { createServerClientFromCookies } from "@/lib/supabase/server";
+import { isServiceRoleConfigured } from "@/lib/mcp/auth";
+import { getServiceSupabase } from "@/lib/supabase/service";
+import { redirectWithCookie, sessionCookieHeader } from "@/lib/oauth/session";
 
 export const dynamic = "force-dynamic";
 
+function backToConsent(request, uid, params = {}) {
+  const url = new URL(`/oauth/interact/${uid}`, request.url);
+  for (const [key, value] of Object.entries(params)) {
+    if (value) url.searchParams.set(key, value);
+  }
+  return url.toString();
+}
+
 export async function POST(request, { params }) {
+  if (!isServiceRoleConfigured()) {
+    return new Response("OAuth not configured", { status: 503 });
+  }
+
+  // uid comes from the path, not the body — a hidden form field is attacker
+  // controlled and would let one interaction's login satisfy another.
   const { uid } = await params;
   if (!uid) {
     return new Response("Missing interaction uid", { status: 400 });
   }
 
-  // Parse the urlencoded form body. Next.js Request exposes a formData() helper
-  // that handles both application/x-www-form-urlencoded and multipart/form-data.
   let email = "";
   let password = "";
   try {
     const form = await request.formData();
     email = String(form.get("email") || "").trim();
     password = String(form.get("password") || "");
-  } catch (err) {
-    return new Response(`Invalid form submission: ${err?.message || err}`, {
-      status: 400,
-    });
+  } catch {
+    return Response.redirect(
+      backToConsent(request, uid, { error: "invalid_request" }),
+      303,
+    );
   }
 
   if (!email || !password) {
-    return new Response("Email and password are required", { status: 400 });
+    return Response.redirect(
+      backToConsent(request, uid, { error: "invalid_credentials" }),
+      303,
+    );
   }
 
-  const supabase = await createServerClientFromCookies();
-  if (!supabase) {
-    return new Response("Auth is not configured on the server", { status: 503 });
+  const supabase = getServiceSupabase();
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error || !data?.user?.id) {
+    return Response.redirect(
+      backToConsent(request, uid, { error: "invalid_credentials" }),
+      303,
+    );
   }
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-  if (error) {
-    // Redirect back to the interact page with an error indicator in the query.
-    // The interact page itself doesn't currently render the error inline
-    // (kept minimal), but the 401 status + message tells callers what
-    // happened. The user can re-submit the form.
-    const loginUrl = new URL(`/oauth/interact/${uid}`, request.url);
-    loginUrl.searchParams.set("error", "invalid_credentials");
-    return Response.redirect(loginUrl.toString(), 303);
-  }
-
-  // Signed in — go back to the interact page. The next render will see the
-  // Supabase session cookies and switch to the Authorize card.
-  const nextUrl = new URL(`/oauth/interact/${uid}`, request.url);
-  return Response.redirect(nextUrl.toString(), 303);
+  return redirectWithCookie(
+    backToConsent(request, uid, { authenticated: "true" }),
+    sessionCookieHeader(request, data.user.id),
+  );
 }

@@ -1,80 +1,91 @@
-// OAuth interaction page — the authorization server redirects here when the
-// user has to log in and/or approve a connector.
+// OAuth consent page — GET /oauth/interact/<uid>
 //
-// Flow:
-//   GET /oauth/interact/<uid>
-//     1. Load the pending authorization request for <uid>.
-//     2. Check the current Supabase session (cookie-based SSR client).
-//     3a. If not logged in → render email+password form (POST .../login)
-//     3b. If logged in → render Authorize button (POST .../confirm)
+// /api/oauth/auth parks the client's authorization request in oauth_codes as
+// `interact_<uid>` and sends the browser here. This page loads that row (the
+// authoritative copy — query params are display hints only), then shows:
+//   • the login form, until a signed oauth_session cookie exists
+//   • the Authorize screen once it does
 //
-// Step 1 is currently stubbed: oidc-provider has been removed and the
-// replacement authorization server is not built yet. The UI below is the piece
-// being reused, so it is left untouched.
+// Consent is recorded by POST .../confirm.
 
+import { cookies } from "next/headers";
 import { isServiceRoleConfigured } from "@/lib/mcp/auth";
-import { getAuthenticatedUser } from "@/lib/supabase/server";
+import { getServiceSupabase } from "@/lib/supabase/service";
+import { CODES_TABLE, PENDING_CODE_PREFIX, findClient } from "@/lib/oauth/shared";
+import { OAUTH_SESSION_COOKIE, readSessionValue } from "@/lib/oauth/session";
 
-// Friendly display names for known client_ids. If the client_id isn't in this
-// map (e.g. a DCR-registered client we've never seen), we fall back to the
-// raw id — better to show something honest than to pretend we know it.
-const CLIENT_DISPLAY_NAMES = {
-  "claude-ai-web": "Claude",
-};
+export const dynamic = "force-dynamic";
 
-export default async function InteractPage({ params }) {
+/**
+ * Load the pending authorization request, or null if it is missing or expired.
+ * Kept out of the component body: the clock read belongs to the data fetch,
+ * not to render.
+ */
+async function loadPendingRequest(supabase, uid) {
+  const { data } = await supabase
+    .from(CODES_TABLE)
+    .select("client_id, redirect_uri, state, scope, expires_at, user_id")
+    .eq("code", `${PENDING_CODE_PREFIX}${uid}`)
+    .maybeSingle();
+
+  if (!data) return null;
+  if (new Date(data.expires_at).getTime() <= Date.now()) return null;
+  return data;
+}
+
+export default async function InteractPage({ params, searchParams }) {
   if (!isServiceRoleConfigured()) {
     return <ErrorCard title="OAuth not configured" body="SUPABASE_SERVICE_ROLE_KEY is missing on the server. Ask the site operator to set it." />;
   }
 
   const { uid } = await params;
+  const query = (await searchParams) || {};
   if (!uid) {
     return <ErrorCard title="Invalid link" body="No interaction id was provided in the URL." />;
   }
 
-  // TODO(oauth-rebuild): re-wire to the new Next.js authorization server.
-  //
-  // This used to load the interaction from oidc-provider via the _interaction
-  // cookie. oidc-provider has been removed, and its replacement does not exist
-  // yet, so there is nothing to read the pending authorization request from.
-  // The presentation components below (LoginCard / AuthorizeCard) are kept
-  // intact and unchanged — only this lookup needs replacing.
-  const details = null;
+  const supabase = getServiceSupabase();
+  const pending = await loadPendingRequest(supabase, uid);
 
-  if (!details) {
+  if (!pending) {
     return (
       <ErrorCard
-        title="Connector sign-in is temporarily unavailable"
-        body="The MindCanvas OAuth server is being rebuilt. Try connecting again once it is back online."
+        title="This link has expired"
+        body="Authorization requests only last a few minutes. Go back to the app you were connecting from and start again."
       />
     );
   }
 
-  // Resolve the current MindCanvas (Supabase) user from the browser session.
-  const { user } = await getAuthenticatedUser();
+  const client = await findClient(supabase, pending.client_id);
+  const clientName = client?.client_name || pending.client_id;
 
-  const interactionParams = details.params || {};
-  const clientId = interactionParams.client_id || "unknown";
-  const clientName = CLIENT_DISPLAY_NAMES[clientId] || clientId;
-  const promptName = details?.prompt?.name;
+  // The signed cookie — not ?authenticated=true — decides which screen renders.
+  // The query param is a spoofable hint; the cookie is what /confirm verifies.
+  const cookieStore = await cookies();
+  const userId = readSessionValue(
+    cookieStore.get(OAUTH_SESSION_COOKIE)?.value || "",
+  );
 
-  // If user is logged in AND prompt requires login (or there's no prompt),
-  // skip to showing the authorize screen. If neither login nor consent is
-  // required, just confirm.
-  const showLogin = !user || promptName === "login";
-  const redirectUri = interactionParams.redirect_uri || "https://claude.ai";
-
-  if (showLogin) {
+  if (!userId) {
     return (
       <InteractShell>
-        <LoginCard uid={uid} clientName={clientName} redirectUri={redirectUri} />
+        <LoginCard
+          uid={uid}
+          clientName={clientName}
+          failed={query.error === "invalid_credentials"}
+        />
       </InteractShell>
     );
   }
 
   return (
     <InteractShell>
-      <AuthorizeCard uid={uid} clientName={clientName} redirectUri={redirectUri} />
+      <AuthorizeCard
+        uid={uid}
+        clientName={clientName}
+        redirectUri={pending.redirect_uri}
+        state={pending.state || ""}
+      />
     </InteractShell>
   );
 }
@@ -103,7 +114,7 @@ function ErrorCard({ title, body }) {
   );
 }
 
-function LoginCard({ uid, clientName, redirectUri }) {
+function LoginCard({ uid, clientName, failed }) {
   return (
     <>
       <p className="font-sans text-warm-gray-light text-xs uppercase tracking-widest font-semibold">
@@ -117,7 +128,14 @@ function LoginCard({ uid, clientName, redirectUri }) {
         <span className="font-semibold text-ink">{clientName}</span> to access your notes.
       </p>
 
+      {failed ? (
+        <p className="font-sans text-sm mt-4 rounded-xl border border-clay/40 bg-clay/10 px-4 py-3 text-ink">
+          That email and password didn&apos;t match. Try again.
+        </p>
+      ) : null}
+
       <form action={`/oauth/interact/${uid}/login`} method="POST" className="mt-8 flex flex-col gap-4">
+        <input type="hidden" name="uid" value={uid} />
         <label className="flex flex-col gap-2">
           <span className="font-sans text-xs uppercase tracking-widest text-warm-gray-light font-semibold">
             Email
@@ -160,7 +178,7 @@ function LoginCard({ uid, clientName, redirectUri }) {
   );
 }
 
-function AuthorizeCard({ uid, clientName, redirectUri }) {
+function AuthorizeCard({ uid, clientName, redirectUri, state }) {
   return (
     <>
       <p className="font-sans text-warm-gray-light text-xs uppercase tracking-widest font-semibold">
@@ -174,6 +192,9 @@ function AuthorizeCard({ uid, clientName, redirectUri }) {
       </p>
 
       <form action={`/oauth/interact/${uid}/confirm`} method="POST" className="mt-8 flex flex-col gap-3">
+        <input type="hidden" name="uid" value={uid} />
+        <input type="hidden" name="redirect_uri" value={redirectUri} />
+        <input type="hidden" name="state" value={state} />
         <button
           type="submit"
           name="confirm"
