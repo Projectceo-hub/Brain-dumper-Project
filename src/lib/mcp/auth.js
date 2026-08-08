@@ -88,30 +88,18 @@ export async function revokeToken(userId, tokenId) {
 }
 
 /**
- * Resolve an OAuth access token issued by our own oidc-provider.
+ * Resolve an OAuth access token issued by the MCP connector flow.
  *
- * Tokens minted by the OAuth flow live in the oidc_models store, NOT in
- * api_tokens, so the hash lookup below can never match one. That was the
- * central defect: a client could complete the entire OAuth handshake, receive
- * a perfectly valid token, present it, and be told 401 — which reads as an
- * endless reconnect loop in Claude's UI.
- *
- * The provider module is imported lazily so the (heavy) oidc-provider
- * dependency is only loaded when a personal API token did not match.
+ * STUB — the oidc-provider implementation was removed; the OAuth server is
+ * being rebuilt as plain Next.js route handlers. Until that lands there is no
+ * OAuth token store to look in, so this always returns null and only personal
+ * API tokens (api_tokens) authenticate. The signature is kept so the rebuilt
+ * lookup drops straight in here.
  */
 async function resolveUserFromOAuthToken(rawToken, issuer) {
-  if (!issuer) return null;
-  try {
-    const { getProvider } = await import("@/lib/oauth/provider");
-    const provider = await getProvider(issuer);
-    const accessToken = await provider.AccessToken.find(rawToken);
-    if (!accessToken) return null;
-    if (accessToken.isExpired) return null;
-    return accessToken.accountId || null;
-  } catch (err) {
-    console.warn("OAuth access token lookup failed:", err?.message || err);
-    return null;
-  }
+  void rawToken;
+  void issuer;
+  return null;
 }
 
 /**

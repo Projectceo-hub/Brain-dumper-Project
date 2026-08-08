@@ -1,25 +1,19 @@
-// OAuth interaction page — oidc-provider redirects here when the auto-approve
-// policy decides an interaction is needed (e.g. config changes re-enable the
-// login/consent prompts, or future code opts into them).
+// OAuth interaction page — the authorization server redirects here when the
+// user has to log in and/or approve a connector.
 //
 // Flow:
 //   GET /oauth/interact/<uid>
-//     1. Read interaction details from oidc-provider via the _interaction cookie
-//        that oidc-provider set when it redirected here.
+//     1. Load the pending authorization request for <uid>.
 //     2. Check the current Supabase session (cookie-based SSR client).
-//     3a. If not logged in → render email+password form (POST /api... see login route)
-//     3b. If logged in → render Authorize button (POST to /oauth/interact/<uid>/confirm)
+//     3a. If not logged in → render email+password form (POST .../login)
+//     3b. If logged in → render Authorize button (POST .../confirm)
 //
-// Critical: this page must NOT create a new Provider instance — use getProvider()
-// from src/lib/oauth/provider. The provider expects Koa-style req/res; we build
-// the same fakeReq/fakeRes shape used by /api/oauth/[[...path]]/route.js.
+// Step 1 is currently stubbed: oidc-provider has been removed and the
+// replacement authorization server is not built yet. The UI below is the piece
+// being reused, so it is left untouched.
 
-import { headers, cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { getProvider } from "@/lib/oauth/provider";
 import { isServiceRoleConfigured } from "@/lib/mcp/auth";
-import { createServerClientFromCookies, getAuthenticatedUser } from "@/lib/supabase/server";
-import { resolvePublicOrigin, oauthIssuerFromOrigin } from "@/lib/publicOrigin";
+import { getAuthenticatedUser } from "@/lib/supabase/server";
 
 // Friendly display names for known client_ids. If the client_id isn't in this
 // map (e.g. a DCR-registered client we've never seen), we fall back to the
@@ -27,31 +21,6 @@ import { resolvePublicOrigin, oauthIssuerFromOrigin } from "@/lib/publicOrigin";
 const CLIENT_DISPLAY_NAMES = {
   "claude-ai-web": "Claude",
 };
-
-// There is no Request object in a server component, so the scheme is
-// reconstructed from the forwarded header. It used to be hardcoded to https,
-// which on localhost produced `https://localhost:3000` here and
-// `http://localhost:3000` in /api/oauth — two different issuers, so
-// getProvider() built two provider instances and the interaction started by
-// one could not be found by the other.
-function originFromHeaders(rawHeaders, forwardedProto) {
-  const host = rawHeaders.host;
-  const isLoopback = /^(localhost|127\.0\.0\.1|\[::1\])(:|$)/i.test(host);
-  const proto = forwardedProto || (isLoopback ? "http" : "https");
-  return resolvePublicOrigin({ url: `${proto}://${host}/` });
-}
-
-// Minimal Koa-style req shape for oidc-provider's interactionDetails().
-// Only `headers` matters here — interactionDetails only reads the
-// _interaction cookie from req.headers.cookie. We don't need a body stream
-// on a GET.
-function fakeRequestFromHeaders(rawHeaders) {
-  return {
-    method: "GET",
-    url: "/auth",
-    headers: rawHeaders,
-  };
-}
 
 export default async function InteractPage({ params }) {
   if (!isServiceRoleConfigured()) {
@@ -63,54 +32,20 @@ export default async function InteractPage({ params }) {
     return <ErrorCard title="Invalid link" body="No interaction id was provided in the URL." />;
   }
 
-  const cookieStore = await cookies();
-  const allCookies = cookieStore.getAll();
-  const headerList = await headers();
-  const rawHeaders = {
-    host: headerList.get("host") || "localhost",
-    cookie: allCookies.map((c) => `${c.name}=${c.value}`).join("; "),
-  };
-
-  const origin = originFromHeaders(
-    rawHeaders,
-    headerList.get("x-forwarded-proto"),
-  );
-
-  let details;
-  let interactionError = "";
-  try {
-    // Must be the same issuer (origin + /api/oauth) the catch-all builds, so
-    // interactionDetails resolves against the same provider instance.
-    const provider = await getProvider(oauthIssuerFromOrigin(origin));
-    const fakeReq = fakeRequestFromHeaders(rawHeaders);
-    const fakeRes = {
-      _statusCode: 200,
-      _headers: {},
-      setHeader(name, value) { this._headers[name.toLowerCase()] = value; },
-      getHeader(name) { return this._headers[name.toLowerCase()]; },
-      removeHeader(name) { delete this._headers[name.toLowerCase()]; },
-      writeHead() {},
-      write() {},
-      end() {},
-      once() {},
-      on() {},
-      emit() {},
-      get finished() { return false; },
-    };
-    details = await provider.interactionDetails(fakeReq, fakeRes);
-  } catch (err) {
-    interactionError = err?.message || "Unknown error";
-  }
+  // TODO(oauth-rebuild): re-wire to the new Next.js authorization server.
+  //
+  // This used to load the interaction from oidc-provider via the _interaction
+  // cookie. oidc-provider has been removed, and its replacement does not exist
+  // yet, so there is nothing to read the pending authorization request from.
+  // The presentation components below (LoginCard / AuthorizeCard) are kept
+  // intact and unchanged — only this lookup needs replacing.
+  const details = null;
 
   if (!details) {
     return (
       <ErrorCard
-        title="This link has expired"
-        body={
-          interactionError
-            ? `Details: ${interactionError}`
-            : "Interaction sessions only last a few minutes. Go back to the app you were connecting from and start again."
-        }
+        title="Connector sign-in is temporarily unavailable"
+        body="The MindCanvas OAuth server is being rebuilt. Try connecting again once it is back online."
       />
     );
   }
